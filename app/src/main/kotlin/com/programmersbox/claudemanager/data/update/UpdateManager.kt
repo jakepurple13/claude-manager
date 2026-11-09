@@ -7,6 +7,7 @@ import dev.nucleusframework.notification.common.notification
 import dev.nucleusframework.updater.NucleusUpdater
 import dev.nucleusframework.updater.UpdateInfo
 import dev.nucleusframework.updater.UpdateResult
+import dev.nucleusframework.updater.provider.GenericProvider
 import dev.nucleusframework.updater.provider.GitHubProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,7 +38,13 @@ class UpdateManager(
     private val scope: AppScope,
 ) {
     private val updater: NucleusUpdater by lazy {
-        NucleusUpdater { provider = GitHubProvider(owner = OWNER, repo = REPO) }
+        // CLAUDE_MANAGER_UPDATE_FEED points the updater at another feed (a folder holding
+        // latest-*.yml and the installers) to test updates without publishing a release.
+        // Must be https, or http on localhost.
+        val feed = System.getenv(FEED_ENV)?.takeIf { it.isNotBlank() }
+        NucleusUpdater {
+            provider = if (feed != null) GenericProvider(feed) else GitHubProvider(owner = OWNER, repo = REPO)
+        }
     }
 
     val currentVersion: String = NucleusApp.version ?: "dev"
@@ -115,6 +122,7 @@ class UpdateManager(
     private companion object {
         const val OWNER = "jakepurple13"
         const val REPO = "claude-manager"
+        const val FEED_ENV = "CLAUDE_MANAGER_UPDATE_FEED"
         const val CHECK_INTERVAL_MS = 6L * 60 * 60 * 1000
     }
 }
