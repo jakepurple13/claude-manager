@@ -1,0 +1,54 @@
+[versions]
+kotlin = "2.4.10"
+compose = "1.12.0"
+nucleus = "2.5.18"
+composenativetray = "2.1.7"
+navigation3 = "1.2.0"
+lifecycle = "2.11.0"
+koin = "4.2.2"
+koin-compiler = "1.2.3"
+room3 = "3.0.3"
+sqlite = "2.7.1"
+ksp = "2.3.13"
+serialization = "1.12.0"
+material3 = "1.12.0-alpha03"
+
+[libraries]
+nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "nucleus" }
+nucleus-window-tao = { module = "dev.nucleusframework:nucleus.decorated-window-tao", version.ref = "nucleus" }
+nucleus-window-material3 = { module = "dev.nucleusframework:nucleus.decorated-window-material3", version.ref = "nucleus" }
+nucleus-darkmode = { module = "dev.nucleusframework:nucleus.darkmode-detector", version.ref = "nucleus" }
+nucleus-notifications = { module = "dev.nucleusframework:nucleus.notification-common", version.ref = "nucleus" }
+nucleus-fs-watcher = { module = "dev.nucleusframework:nucleus.fs-watcher", version.ref = "nucleus" }
+nucleus-system-info = { module = "dev.nucleusframework:nucleus.system-info", version.ref = "nucleus" }
+composenativetray-app = { module = "dev.nucleusframework:composenativetray-app", version.ref = "composenativetray" }
+
+navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
+lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+lifecycle-viewmodel-navigation3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycle" }
+
+koin-bom = { module = "io.insert-koin:koin-bom", version.ref = "koin" }
+koin-core = { module = "io.insert-koin:koin-core" }
+koin-annotations = { module = "io.insert-koin:koin-annotations" }
+koin-compose = { module = "io.insert-koin:koin-compose" }
+koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel" }
+koin-compose-navigation3 = { module = "io.insert-koin:koin-compose-navigation3" }
+koin-test = { module = "io.insert-koin:koin-test" }
+
+room3-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
+room3-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
+
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.compose", version.ref = "compose" }
+nucleus = { id = "dev.nucleusframework", version.ref = "nucleus" }
+koin-compiler = { id = "io.insert-koin.compiler.plugin", version.ref = "koin-compiler" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room3 = { id = "androidx.room3", version.ref = "room3" }
