@@ -22,6 +22,10 @@ import androidx.compose.ui.input.key.type
 import com.programmersbox.claudemanager.ui.navigation.AppNavigation
 import com.programmersbox.claudemanager.ui.navigation.Navigator
 import com.programmersbox.claudemanager.ui.theme.ClaudeManagerTheme
+import com.programmersbox.claudemanager.ui.theme.LocalThemeRipple
+import com.programmersbox.claudemanager.ui.theme.ThemeRipple
+import com.programmersbox.claudemanager.ui.theme.ThemeRippleHost
+import androidx.compose.runtime.CompositionLocalProvider
 import com.programmersbox.claudemanager.ui.tray.ClaudeManagerTray
 import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.window.material.MaterialDecoratedWindow
@@ -44,7 +48,9 @@ fun main(args: Array<String>) {
         val navigator = remember { koin.get<Navigator>() }
 
         val prefs by settings.settings.collectAsState()
-        ClaudeManagerTheme(prefs.themeMode) {
+        val themeRipple = remember { ThemeRipple() }
+        ClaudeManagerTheme(prefs.themeMode, prefs.themePalette) {
+          CompositionLocalProvider(LocalThemeRipple provides themeRipple) {
             if (appWindow.visible) {
                 MaterialDecoratedWindow(
                     onCloseRequest = appWindow::hide,
@@ -61,7 +67,9 @@ fun main(args: Array<String>) {
                     },
                 ) {
                     MaterialTitleBar { Text("Claude Manager") }
-                    Surface(Modifier.fillMaxSize()) { AppNavigation() }
+                    ThemeRippleHost(themeRipple, Modifier.fillMaxSize()) {
+                        Surface(Modifier.fillMaxSize()) { AppNavigation() }
+                    }
                 }
             }
 
@@ -69,6 +77,7 @@ fun main(args: Array<String>) {
                 onOpenWindow = appWindow::show,
                 onQuit = ::exitApplication,
             )
+          }
         }
     }
 }

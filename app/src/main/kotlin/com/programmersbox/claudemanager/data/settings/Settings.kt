@@ -28,6 +28,8 @@ data class AppSettings(
     val historyDays: Int = 7,
     /** "system", "light" or "dark". */
     @ColumnInfo(defaultValue = "system") val themeMode: String = "system",
+    /** A [com.programmersbox.claudemanager.ui.theme.Palette] id. */
+    @ColumnInfo(defaultValue = "harbor") val themePalette: String = "harbor",
     /** How often sessions, shells and transcripts are re-read. */
     @ColumnInfo(defaultValue = "2") val refreshSeconds: Int = 2,
     /** Check GitHub Releases for a new version at startup and every 6 hours. */
