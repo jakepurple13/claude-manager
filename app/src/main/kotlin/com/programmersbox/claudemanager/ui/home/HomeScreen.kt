@@ -311,7 +311,7 @@ internal fun SessionCard(
                 }
                 kids.take(4).forEach { kid -> key(kid.key) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(kid.kind, Modifier.width(44.dp), fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(kid.kind, Modifier.width(44.dp), fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.secondary)
                         StatusDot(kid.status)
                         Text(kid.label, Modifier.weight(1f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         kid.startedAt?.let { Text(formatElapsed(it, now), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }

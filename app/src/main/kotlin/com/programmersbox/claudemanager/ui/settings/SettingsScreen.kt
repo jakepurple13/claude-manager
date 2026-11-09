@@ -1,5 +1,11 @@
 package com.programmersbox.claudemanager.ui.settings
 
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.programmersbox.claudemanager.ui.theme.LocalThemeRipple
+import com.programmersbox.claudemanager.ui.theme.Palette
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -241,9 +247,24 @@ private fun StatusChip(text: String, color: Color) {
 @Composable
 private fun DisplaySettings(s: AppSettings, vm: SettingsViewModel) {
     Group("Appearance") {
+        val ripple = LocalThemeRipple.current
+        val scope = rememberCoroutineScope()
+        val modeBounds = remember { arrayOf(Rect.Zero) }
+        val palette = Palette.fromId(s.themePalette)
         SettingRow("Theme", "Follow the system, or always light or dark.", first = true) {
-            Segmented(listOf("system" to "System", "light" to "Light", "dark" to "Dark"), s.themeMode, { mode -> vm.update { it.copy(themeMode = mode) } })
+            Segmented(
+                listOf("system" to "System", "light" to "Light", "dark" to "Dark"),
+                s.themeMode,
+                { mode -> ripple.launch(scope, modeBounds[0].center) { vm.update { it.copy(themeMode = mode) } } },
+                Modifier.onGloballyPositioned { modeBounds[0] = it.boundsInWindow() },
+            )
         }
+        SettingRow("Palette", palette.displayName + " · " + palette.blurb) {}
+        PalettePicker(
+            selectedId = palette.id,
+            onSelect = { picked -> vm.update { it.copy(themePalette = picked.id) } },
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 14.dp),
+        )
     }
     Group("Costs") {
         SettingRow(
