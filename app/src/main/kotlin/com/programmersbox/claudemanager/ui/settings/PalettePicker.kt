@@ -7,18 +7,18 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,27 +41,51 @@ import com.programmersbox.claudemanager.ui.theme.LocalThemeRipple
 import com.programmersbox.claudemanager.ui.theme.Palette
 import com.programmersbox.claudemanager.ui.theme.PaletteColors
 
-/** Grid of palette swatches. Picking one ripples the new theme out from the swatch. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Grid of palette swatches: hue runs left to right, brightness from light at the top to dark at the
+ * bottom (see [Palette.grid]), with dark-only palettes in their own row underneath. Picking one
+ * ripples the new theme out from the swatch.
+ */
 @Composable
 fun PalettePicker(selectedId: String, onSelect: (Palette) -> Unit, modifier: Modifier = Modifier) {
+    val columns = 6
+    val grid = remember { Palette.grid(columns) }
+    val darkOnly = remember { Palette.darkOnlyRow() }
+    val rows = remember(grid) { (0 until grid.maxOf { it.size }).map { r -> grid.map { it.getOrNull(r) } } }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        rows.forEach { row -> PaletteRow(row, selectedId, onSelect) }
+        Text(
+            "DARK ONLY",
+            Modifier.padding(start = 4.dp, top = 6.dp),
+            fontSize = 10.5.sp,
+            letterSpacing = 0.8.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        PaletteRow(darkOnly + List(columns - darkOnly.size) { null }, selectedId, onSelect)
+    }
+}
+
+/** One row of the grid; a null cell keeps its column's width empty so tiles line up across rows. */
+@Composable
+private fun PaletteRow(cells: List<Palette?>, selectedId: String, onSelect: (Palette) -> Unit) {
     val ripple = LocalThemeRipple.current
     val scope = rememberCoroutineScope()
-    FlowRow(
-        modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Palette.entries.forEach { palette ->
-            val bounds = remember { BoundsHolder() }
-            PaletteTile(
-                palette = palette,
-                selected = palette.id == selectedId,
-                onClick = {
-                    if (palette.id != selectedId) ripple.launch(scope, bounds.rect.center) { onSelect(palette) }
-                },
-                modifier = Modifier.onGloballyPositioned { bounds.rect = it.boundsInWindow() },
-            )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        cells.forEach { palette ->
+            if (palette == null) {
+                Spacer(Modifier.weight(1f))
+            } else {
+                val bounds = remember { BoundsHolder() }
+                PaletteTile(
+                    palette = palette,
+                    selected = palette.id == selectedId,
+                    onClick = {
+                        if (palette.id != selectedId) ripple.launch(scope, bounds.rect.center) { onSelect(palette) }
+                    },
+                    modifier = Modifier.weight(1f).onGloballyPositioned { bounds.rect = it.boundsInWindow() },
+                )
+            }
         }
     }
 }
@@ -74,7 +98,7 @@ private fun PaletteTile(palette: Palette, selected: Boolean, onClick: () -> Unit
     val ringWidth by animateDpAsState(if (selected) 2.dp else 0.dp, tween(250), label = "ringWidth")
     val shape = RoundedCornerShape(10.dp)
     Column(
-        modifier.width(96.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(4.dp),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
@@ -92,16 +116,20 @@ private fun PaletteTile(palette: Palette, selected: Boolean, onClick: () -> Unit
             }
         }
         Column(Modifier.padding(horizontal = 2.dp)) {
-            Text(
+            // One-word names stay on one line and shrink to fit instead of breaking mid-word;
+            // "High Contrast" may wrap at its space.
+            BasicText(
                 palette.displayName,
-                fontSize = 12.5.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 15.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                ),
+                maxLines = if (' ' in palette.displayName) 2 else 1,
+                // Clip, not Ellipsis: an ellipsized line doesn't count as overflowing, so autoSize wouldn't shrink it.
+                overflow = TextOverflow.Clip,
+                autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.5.sp, stepSize = 0.5.sp),
             )
-            if (palette.darkOnly) {
-                Text("Dark only", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
         }
     }
 }

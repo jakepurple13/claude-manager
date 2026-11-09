@@ -31,4 +31,24 @@ class PaletteTest {
         assertEquals(Palette.Harbor.dark.primary, Palette.Harbor.dark.secondary)
         assert(Palette.Sunset.dark.primary != Palette.Sunset.dark.secondary)
     }
+
+    @Test
+    fun gridRunsHueLeftToRightAndBrightnessTopToBottom() {
+        val grid = Palette.grid(columns = 6)
+        println(grid.joinToString("\n") { col -> col.joinToString { "${it.displayName}(${it.hue?.toInt() ?: "grey"}, ${"%.2f".format(it.brightness)})" } })
+        assertEquals(listOf(3, 3, 3, 3, 3, 2), grid.map { it.size })
+        assertEquals(Palette.entries.filterNot { it.darkOnly }.toSet(), grid.flatten().toSet())
+        grid.forEach { column ->
+            column.zipWithNext().forEach { (above, below) -> assert(above.brightness >= below.brightness) { "$above above $below" } }
+        }
+        // Every hue in a column is at or past every hue in the column before it; grey comes last.
+        val hues = grid.map { col -> col.map { it.hue ?: Float.MAX_VALUE } }
+        hues.zipWithNext().forEach { (left, right) -> assert(left.max() <= right.min()) { "$left before $right" } }
+        assert(Palette.Graphite in grid.last())
+    }
+
+    @Test
+    fun darkOnlyPalettesGetTheirOwnRowInHueOrder() {
+        assertEquals(listOf(Palette.Aurora, Palette.Neon, Palette.Midnight), Palette.darkOnlyRow())
+    }
 }
