@@ -71,6 +71,8 @@ import com.programmersbox.claudemanager.ui.components.color
 import com.programmersbox.claudemanager.util.firstLine
 import com.programmersbox.claudemanager.ui.components.formatElapsed
 import com.programmersbox.claudemanager.ui.components.formatTokens
+import com.programmersbox.claudemanager.ui.components.formatCost
+import com.programmersbox.claudemanager.data.cost.CostEstimate
 import com.programmersbox.claudemanager.ui.components.rememberNow
 import com.programmersbox.claudemanager.ui.navigation.Navigator
 import com.programmersbox.claudemanager.ui.theme.StatusColors
@@ -86,15 +88,21 @@ fun HomeScreen(
     val view by vm.view.collectAsState()
     val windowMs by vm.windowMs.collectAsState()
     val lanes by vm.lanes.collectAsState()
+    val showCost by vm.showCost.collectAsState()
     val now by rememberNow()
     val sessions = state.sessions
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer)) {
-        SummaryBar(sessions, devicesHeld = if (state.cdmAvailable) state.devices.count { it.holderSessionId != null } else null) {
+        SummaryBar(
+            sessions,
+            devicesHeld = if (state.cdmAvailable) state.devices.count { it.holderSessionId != null } else null,
+            totalCost = if (showCost) sessions.fold(CostEstimate.Zero) { acc, it -> acc + it.activity.cost } else null,
+        ) {
             AnimatedVisibility(view == HomeView.Timeline, enter = fadeIn(), exit = fadeOut()) {
                 Segmented(TimelineWindows, windowMs, vm::setWindow)
             }
             Segmented(listOf(HomeView.Board to "Board", HomeView.Timeline to "Timeline"), view, vm::setView)
+            TextButton(onClick = navigator::openSettings) { Text("Settings") }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AnimatedVisibility(state.orphanShells.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -126,6 +134,7 @@ fun HomeScreen(
                         SessionCard(
                             session = session,
                             now = now,
+                            showCost = showCost,
                             onClick = { navigator.openSession(session.live.sessionId) },
                             modifier = Modifier.animateItem(),
                         )
@@ -146,7 +155,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, actions: @Composable RowScope.() -> Unit) {
+private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, totalCost: CostEstimate?, actions: @Composable RowScope.() -> Unit) {
     Row(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -157,6 +166,12 @@ private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, action
         Stat(sessions.sumOf { s -> s.activity.subagents.count { it.running } }, "agents running")
         Stat(sessions.sumOf { it.shells.size }, "shells")
         devicesHeld?.let { Stat(it, "devices held") }
+        totalCost?.let {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                RollingText(formatCost(it), TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface))
+                Text("est. cost", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.5.sp)
+            }
+        }
         Spacer(Modifier.weight(1f))
         actions()
     }
@@ -214,7 +229,7 @@ private fun OrphanBanner(orphans: List<ShellProcess>, onKill: (Long) -> Boolean)
 private data class KidRow(val key: String, val kind: String, val label: String, val status: SessionStatus, val startedAt: Long?)
 
 @Composable
-private fun SessionCard(session: SessionSummary, now: Long, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SessionCard(session: SessionSummary, now: Long, showCost: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val live = session.live
     val activity = session.activity
     val borderColor by animateColorAsState(
@@ -301,7 +316,8 @@ private fun SessionCard(session: SessionSummary, now: Long, onClick: () -> Unit,
                     overflow = TextOverflow.Ellipsis,
                 )
                 RollingText(
-                    "${formatTokens(activity.contextTokens)} ctx · ${formatTokens(activity.outputTokens)} out",
+                    "${formatTokens(activity.contextTokens)} ctx · ${formatTokens(activity.outputTokens)} out" +
+                        if (showCost) " · ${formatCost(activity.cost)}" else "",
                     style = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
                 )
             }

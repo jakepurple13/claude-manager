@@ -5,6 +5,8 @@ import com.programmersbox.claudemanager.AppWindow
 import com.programmersbox.claudemanager.data.SessionRepository
 import com.programmersbox.claudemanager.data.SessionsState
 import com.programmersbox.claudemanager.data.registry.SessionStatus
+import com.programmersbox.claudemanager.data.settings.AppSettings
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
 import com.programmersbox.claudemanager.ui.navigation.Navigator
 import com.programmersbox.claudemanager.util.firstLine
 import dev.nucleusframework.notification.common.NotificationManager
@@ -25,7 +27,13 @@ object SessionEvents {
     /** Turns shorter than this don't notify; quick replies would be noise. */
     const val MIN_TURN_MS = 20_000L
 
-    fun diff(previous: SessionsState, current: SessionsState, workingSince: Map<String, Long>, now: Long): List<SessionEvent> {
+    fun diff(
+        previous: SessionsState,
+        current: SessionsState,
+        workingSince: Map<String, Long>,
+        now: Long,
+        minTurnMs: Long = MIN_TURN_MS,
+    ): List<SessionEvent> {
         if (!previous.loaded) return emptyList()
         val before = previous.sessions.associateBy { it.live.sessionId }
         val events = mutableListOf<SessionEvent>()
@@ -38,7 +46,7 @@ object SessionEvents {
             }
             if (was == SessionStatus.Working && isNow == SessionStatus.Idle) {
                 val worked = now - (workingSince[s.live.sessionId] ?: now)
-                if (worked >= MIN_TURN_MS) events += SessionEvent.FinishedTurn(s.live.sessionId, s.displayName, worked)
+                if (worked >= minTurnMs) events += SessionEvent.FinishedTurn(s.live.sessionId, s.displayName, worked)
             }
         }
         val knownOrphans = previous.orphanShells.map { it.pid }.toSet()
@@ -52,6 +60,7 @@ class SessionNotifier(
     private val repository: SessionRepository,
     private val navigator: Navigator,
     private val window: AppWindow,
+    private val settings: SettingsRepository,
     private val scope: AppScope,
 ) {
     private var job: Job? = null
@@ -64,7 +73,10 @@ class SessionNotifier(
             var previous = SessionsState()
             repository.state.collect { state ->
                 val now = System.currentTimeMillis()
-                SessionEvents.diff(previous, state, workingSince, now).forEach(::send)
+                val prefs = settings.settings.value
+                SessionEvents.diff(previous, state, workingSince, now, prefs.minTurnSeconds * 1000L)
+                    .filter { it.enabledIn(prefs) }
+                    .forEach(::send)
                 state.sessions.forEach { s ->
                     if (s.live.status == SessionStatus.Working) workingSince.putIfAbsent(s.live.sessionId, now)
                     else workingSince.remove(s.live.sessionId)
@@ -72,6 +84,12 @@ class SessionNotifier(
                 previous = state
             }
         }
+    }
+
+    private fun SessionEvent.enabledIn(prefs: AppSettings): Boolean = when (this) {
+        is SessionEvent.Waiting -> prefs.notifyWaiting
+        is SessionEvent.FinishedTurn -> prefs.notifyFinished
+        is SessionEvent.OrphanShell -> prefs.notifyOrphanShells
     }
 
     private fun send(event: SessionEvent) {

@@ -31,6 +31,9 @@ data object Home : NavKey
 @Serializable
 data class SessionRoute(val id: String, val timeline: Boolean = false) : NavKey
 
+@Serializable
+data object SettingsRoute : NavKey
+
 /** Owns the back stack so screens and the tray can navigate without holding NavDisplay state. */
 class Navigator {
     val backStack = mutableStateListOf<NavKey>(Home)
@@ -42,6 +45,12 @@ class Navigator {
         if (current is SessionRoute && current.id == sessionId) return
         backStack.removeAll { it is SessionRoute }
         backStack.add(SessionRoute(sessionId, timeline))
+    }
+
+    fun openSettings() {
+        if (backStack.lastOrNull() == SettingsRoute) return
+        backStack.removeAll { it == SettingsRoute }
+        backStack.add(SettingsRoute)
     }
 
     fun back() {

@@ -1,5 +1,7 @@
 package com.programmersbox.claudemanager.data.transcript
 
+import com.programmersbox.claudemanager.data.cost.CostEstimate
+
 /** One tool call seen in a transcript. */
 data class ToolCall(
     val id: String,
@@ -22,6 +24,8 @@ data class SubagentInfo(
     val recent: List<ToolCall>,
     val lastText: String?,
     val toolTimes: List<Long> = emptyList(),
+    /** API-equivalent cost of this subagent's own requests. */
+    val cost: CostEstimate = CostEstimate.Zero,
 )
 
 /** A background Bash command the session started, as recorded in its transcript. */
@@ -49,4 +53,6 @@ data class SessionActivity(
     val subagents: List<SubagentInfo> = emptyList(),
     val backgroundCommands: List<BackgroundCommand> = emptyList(),
     val toolTimes: List<Long> = emptyList(),
+    /** API-equivalent cost of the main thread plus all subagents. */
+    val cost: CostEstimate = CostEstimate.Zero,
 )

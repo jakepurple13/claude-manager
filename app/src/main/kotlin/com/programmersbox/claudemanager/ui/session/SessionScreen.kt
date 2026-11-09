@@ -64,6 +64,7 @@ import com.programmersbox.claudemanager.ui.components.StatusDot
 import com.programmersbox.claudemanager.ui.components.StatusPill
 import com.programmersbox.claudemanager.ui.components.formatElapsed
 import com.programmersbox.claudemanager.ui.components.formatTokens
+import com.programmersbox.claudemanager.ui.components.formatCost
 import com.programmersbox.claudemanager.ui.components.rememberNow
 import com.programmersbox.claudemanager.ui.motion.EmphasizedDecelerate
 import com.programmersbox.claudemanager.ui.motion.RollingText
@@ -90,6 +91,7 @@ fun SessionScreen(
     val windowMs by vm.windowMs.collectAsState()
     val lanes by vm.lanes.collectAsState()
     val selected by vm.selected.collectAsState()
+    val showCost by vm.showCost.collectAsState()
     val now by rememberNow()
 
     Surface(Modifier.fillMaxSize().sessionContainer(vm.sessionId)) {
@@ -103,7 +105,7 @@ fun SessionScreen(
                 Text("This session has ended.", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 return@Column
             }
-            Header(s, now)
+            Header(s, now, showCost)
             Row(Modifier.padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 PrimaryTabRow(selectedTabIndex = tab.ordinal, modifier = Modifier.width(220.dp), divider = {}) {
                     SessionTab.entries.forEach { t ->
@@ -149,7 +151,7 @@ fun SessionScreen(
 }
 
 @Composable
-private fun Header(s: SessionSummary, now: Long) {
+private fun Header(s: SessionSummary, now: Long, showCost: Boolean) {
     val live = s.live
     val a = s.activity
     Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -166,6 +168,7 @@ private fun Header(s: SessionSummary, now: Long) {
             Stat("Elapsed", formatElapsed(live.startedAt, now), roll = false)
             Stat("Context", formatTokens(a.contextTokens))
             Stat("Output", formatTokens(a.outputTokens))
+            if (showCost) Stat("Est. cost", formatCost(a.cost))
             Stat("Tool calls", a.toolCount.toString())
             Stat("Agents", a.subagents.size.toString())
             Stat("Shells", s.shells.size.toString())

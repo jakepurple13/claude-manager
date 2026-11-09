@@ -11,6 +11,8 @@ import androidx.room3.RoomDatabase
 import androidx.room3.Upsert
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.programmersbox.claudemanager.ClaudePaths
+import com.programmersbox.claudemanager.data.settings.AppSettings
+import com.programmersbox.claudemanager.data.settings.SettingsDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlin.io.path.createDirectories
@@ -36,14 +38,15 @@ interface SessionLabelDao {
 }
 
 @Database(
-    entities = [SessionLabelEntity::class, SessionRecordEntity::class, StatusSegmentEntity::class],
-    version = 2,
+    entities = [SessionLabelEntity::class, SessionRecordEntity::class, StatusSegmentEntity::class, AppSettings::class],
+    version = 3,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class ClaudeManagerDatabase : RoomDatabase() {
     abstract fun sessionLabelDao(): SessionLabelDao
     abstract fun historyDao(): HistoryDao
+    abstract fun settingsDao(): SettingsDao
 }
 
 fun buildDatabase(paths: ClaudePaths): ClaudeManagerDatabase {
@@ -60,3 +63,5 @@ fun buildDatabase(paths: ClaudePaths): ClaudeManagerDatabase {
 fun sessionLabelDao(database: ClaudeManagerDatabase): SessionLabelDao = database.sessionLabelDao()
 
 fun historyDao(database: ClaudeManagerDatabase): HistoryDao = database.historyDao()
+
+fun settingsDao(database: ClaudeManagerDatabase): SettingsDao = database.settingsDao()

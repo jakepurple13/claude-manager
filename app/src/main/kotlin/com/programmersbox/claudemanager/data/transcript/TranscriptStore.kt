@@ -31,6 +31,7 @@ class TranscriptStore(private val paths: ClaudePaths) {
     fun activity(sessionId: String): SessionActivity {
         val transcript = locate(sessionId) ?: return SessionActivity()
         val main = read(transcript)
+        val agents = subagents(transcript.parent.resolve(sessionId).resolve("subagents"))
         return SessionActivity(
             title = main.title,
             model = main.model,
@@ -42,9 +43,10 @@ class TranscriptStore(private val paths: ClaudePaths) {
             recent = main.recent(8),
             lastText = main.lastText,
             lastActivityAt = main.lastActivityAt,
-            subagents = subagents(transcript.parent.resolve(sessionId).resolve("subagents")),
+            subagents = agents,
             backgroundCommands = main.backgroundCommands,
             toolTimes = main.toolTimes,
+            cost = agents.fold(main.cost) { acc, a -> acc + a.cost },
         )
     }
 
@@ -90,6 +92,7 @@ class TranscriptStore(private val paths: ClaudePaths) {
                 recent = acc.recent(6),
                 lastText = acc.lastText,
                 toolTimes = acc.toolTimes,
+                cost = acc.cost,
             )
         }.sortedBy { it.startedAt ?: 0 }
     }

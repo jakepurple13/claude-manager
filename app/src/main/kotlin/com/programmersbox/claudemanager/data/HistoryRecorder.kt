@@ -4,6 +4,7 @@ import com.programmersbox.claudemanager.AppScope
 import com.programmersbox.claudemanager.data.db.HistoryDao
 import com.programmersbox.claudemanager.data.db.SessionRecordEntity
 import com.programmersbox.claudemanager.data.db.StatusSegmentEntity
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
 import com.programmersbox.claudemanager.util.firstLine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 class HistoryRecorder(
     private val repository: SessionRepository,
     private val history: HistoryDao,
+    private val settings: SettingsRepository,
     private val scope: AppScope,
 ) {
     private data class Open(val id: Long, val status: String)
@@ -30,8 +32,9 @@ class HistoryRecorder(
         job = scope.launch {
             val now = System.currentTimeMillis()
             history.closeDanglingSegments()
-            history.deleteSegmentsBefore(now - RETENTION_MS)
-            history.deleteSessionsBefore(now - RETENTION_MS)
+            val retentionMs = settings.current().historyDays * DAY_MS
+            history.deleteSegmentsBefore(now - retentionMs)
+            history.deleteSessionsBefore(now - retentionMs)
             repository.state.collect { state -> if (state.loaded) record(state, System.currentTimeMillis()) }
         }
     }
@@ -88,6 +91,6 @@ class HistoryRecorder(
     private companion object {
         const val MAIN = "main"
         const val RECORD_WRITE_MS = 15_000L
-        const val RETENTION_MS = 7L * 24 * 60 * 60 * 1000
+        const val DAY_MS = 24L * 60 * 60 * 1000
     }
 }

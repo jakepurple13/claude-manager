@@ -119,3 +119,9 @@ fun formatTokens(tokens: Long): String = when {
     else -> tokens.toString()
 }
 
+
+/** "$1.84", "<$0.01", with a trailing "+" when some responses used a model without a known price. */
+fun formatCost(cost: com.programmersbox.claudemanager.data.cost.CostEstimate): String {
+    val base = if (cost.usd > 0 && cost.usd < 0.01) "<$0.01" else "$%.2f".format(cost.usd)
+    return if (cost.unpricedResponses > 0) "$base+" else base
+}

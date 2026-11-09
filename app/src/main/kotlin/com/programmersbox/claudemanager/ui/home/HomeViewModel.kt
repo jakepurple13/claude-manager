@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.programmersbox.claudemanager.data.SessionRepository
 import com.programmersbox.claudemanager.data.SessionsState
 import com.programmersbox.claudemanager.data.db.HistoryDao
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
+import kotlinx.coroutines.flow.map
 import com.programmersbox.claudemanager.ui.timeline.TimelineBuilder
 import com.programmersbox.claudemanager.ui.timeline.TimelineLane
 import com.programmersbox.claudemanager.ui.timeline.TimelineWindows
@@ -20,7 +22,11 @@ enum class HomeView { Board, Timeline }
 class HomeViewModel(
     private val repository: SessionRepository,
     history: HistoryDao,
+    settings: SettingsRepository,
 ) : ViewModel() {
+    val showCost: StateFlow<Boolean> =
+        settings.settings.map { it.showCost }.stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value.showCost)
+
     val state: StateFlow<SessionsState> = repository.state
 
     private val _view = MutableStateFlow(HomeView.Board)

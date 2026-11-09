@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.programmersbox.claudemanager.data.SessionRepository
+import com.programmersbox.claudemanager.data.cost.CostEstimate
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
+import com.programmersbox.claudemanager.ui.components.formatCost
 import com.programmersbox.claudemanager.data.registry.SessionStatus
 import com.programmersbox.claudemanager.ui.components.Chip
 import com.programmersbox.claudemanager.ui.components.StatusDot
@@ -49,8 +52,10 @@ fun NucleusApplicationScope.ClaudeManagerTray(
     onQuit: () -> Unit,
     repository: SessionRepository = koinInject(),
     navigator: Navigator = koinInject(),
+    settingsRepository: SettingsRepository = koinInject(),
 ) {
     val state by repository.state.collectAsState()
+    val settings by settingsRepository.settings.collectAsState()
     val sessions = state.sessions
     val waiting = sessions.count { it.live.status == SessionStatus.Waiting }
 
@@ -63,6 +68,10 @@ fun NucleusApplicationScope.ClaudeManagerTray(
         windowSize = DpSize(340.dp, 460.dp),
         menu = {
             Item(label = "Open Claude Manager") { onOpenWindow() }
+            Item(label = "Settings…") {
+                navigator.openSettings()
+                onOpenWindow()
+            }
             Divider()
             Item(label = "Quit") { onQuit() }
         },
@@ -121,7 +130,8 @@ fun NucleusApplicationScope.ClaudeManagerTray(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${sessions.sumOf { it.activity.outputTokens } / 1000}k output tokens",
+                        "${sessions.sumOf { it.activity.outputTokens } / 1000}k output tokens" +
+                            if (settings.showCost) " · ${formatCost(sessions.fold(CostEstimate.Zero) { acc, it -> acc + it.activity.cost })}" else "",
                         Modifier.weight(1f),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

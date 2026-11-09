@@ -11,6 +11,11 @@ import com.programmersbox.claudemanager.data.SessionRepository
 import com.programmersbox.claudemanager.data.HistoryRecorder
 import com.programmersbox.claudemanager.data.db.buildDatabase
 import com.programmersbox.claudemanager.data.db.historyDao
+import com.programmersbox.claudemanager.data.db.settingsDao
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
+import com.programmersbox.claudemanager.ui.navigation.SettingsRoute
+import com.programmersbox.claudemanager.ui.settings.SettingsScreen
+import com.programmersbox.claudemanager.ui.settings.SettingsViewModel
 import com.programmersbox.claudemanager.data.db.sessionLabelDao
 import com.programmersbox.claudemanager.data.registry.SessionRegistry
 import com.programmersbox.claudemanager.ui.home.HomeScreen
@@ -35,6 +40,8 @@ val appModule = module {
     single { create(::buildDatabase) }
     single { create(::sessionLabelDao) }
     single { create(::historyDao) }
+    single { create(::settingsDao) }
+    single<SettingsRepository>()
     single<AppScope>()
     single<SessionRegistry>()
     single<TranscriptStore>()
@@ -48,7 +55,9 @@ val appModule = module {
 
     viewModel<HomeViewModel>()
     viewModel<SessionViewModel>()
+    viewModel<SettingsViewModel>()
 
     navigation<Home> { HomeScreen() }
+    navigation<SettingsRoute> { SettingsScreen() }
     navigation<SessionRoute> { route -> SessionScreen(vm = koinViewModel { parametersOf(route.id, route.timeline) }) }
 }

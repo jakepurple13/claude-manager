@@ -1,5 +1,7 @@
 package com.programmersbox.claudemanager.data.transcript
 
+import com.programmersbox.claudemanager.data.cost.CostEstimate
+import com.programmersbox.claudemanager.data.cost.Usage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -25,6 +27,8 @@ class TranscriptAccumulator {
 
     /** Output tokens per API message id; one message is split over several records. */
     private val outputByMessage = HashMap<String, Long>()
+    /** Final usage per API message id, for cost estimates. */
+    private val usageByMessage = HashMap<String, Usage>()
     private val tools = LinkedHashMap<String, ToolCall>()
     private val backgroundByToolId = LinkedHashMap<String, BackgroundCommand>()
     private val backgroundTaskToToolId = HashMap<String, String>()
@@ -32,6 +36,7 @@ class TranscriptAccumulator {
 
     val outputTokens: Long get() = outputByMessage.values.sum()
     val toolCount: Int get() = tools.size
+    val cost: CostEstimate get() = CostEstimate.of(usageByMessage.values)
     val current: ToolCall? get() = tools.values.lastOrNull()?.takeIf { !it.done }
     fun recent(n: Int): List<ToolCall> = tools.values.toList().takeLast(n).reversed()
     val backgroundCommands: List<BackgroundCommand> get() = backgroundByToolId.values.toList()
@@ -58,7 +63,20 @@ class TranscriptAccumulator {
         message.obj("usage")?.let { usage ->
             contextTokens = usage.long("input_tokens") + usage.long("cache_read_input_tokens") +
                 usage.long("cache_creation_input_tokens")
-            message.str("id")?.let { id -> outputByMessage[id] = maxOf(outputByMessage[id] ?: 0, usage.long("output_tokens")) }
+            message.str("id")?.let { id ->
+                outputByMessage[id] = maxOf(outputByMessage[id] ?: 0, usage.long("output_tokens"))
+                val creation = usage.obj("cache_creation")
+                val write1h = creation?.long("ephemeral_1h_input_tokens") ?: 0
+                val write5m = creation?.long("ephemeral_5m_input_tokens") ?: (usage.long("cache_creation_input_tokens") - write1h)
+                usageByMessage[id] = Usage(
+                    model = message.str("model"),
+                    input = usage.long("input_tokens"),
+                    cacheWrite5m = write5m.coerceAtLeast(0),
+                    cacheWrite1h = write1h,
+                    cacheRead = usage.long("cache_read_input_tokens"),
+                    output = outputByMessage.getValue(id),
+                )
+            }
         }
         message.arr("content")?.forEach { element ->
             val block = element as? JsonObject ?: return@forEach
