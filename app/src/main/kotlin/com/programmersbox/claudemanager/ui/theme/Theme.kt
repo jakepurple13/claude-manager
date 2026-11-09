@@ -10,6 +10,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import dev.nucleusframework.darkmodedetector.isSystemInDarkMode
 
 /** Status colors, the same in every palette so a state always reads the same way. */
@@ -53,7 +54,20 @@ class PaletteColors(
             primaryContainer = primaryContainer,
             onPrimaryContainer = onPrimaryContainer,
             secondary = secondary,
+            onSecondary = contentOn(secondary),
             tertiary = secondary,
+            onTertiary = contentOn(secondary),
+            // Selected segmented buttons, chips and similar use these; left unset they stay Material's purple.
+            secondaryContainer = primaryContainer,
+            onSecondaryContainer = onPrimaryContainer,
+            tertiaryContainer = primaryContainer,
+            onTertiaryContainer = onPrimaryContainer,
+            surfaceTint = primary,
+            inversePrimary = primaryContainer,
+            inverseSurface = onSurface,
+            inverseOnSurface = surface,
+            surfaceBright = surfaceContainerHigh,
+            surfaceDim = background,
             background = background,
             onBackground = onSurface,
             surface = surface,
@@ -71,6 +85,9 @@ class PaletteColors(
         )
     }
 }
+
+/** Near-black or white, whichever reads better on [color]. */
+private fun contentOn(color: Color): Color = if (color.luminance() > 0.4f) Color(0xFF111111) else Color.White
 
 /**
  * Hex values in this order: background, surface, surfaceContainer, surfaceContainerHigh, onSurface,
@@ -209,8 +226,50 @@ enum class Palette(
     /** The variant to show; dark-only palettes ignore a light request. */
     fun colorsFor(dark: Boolean): PaletteColors = if (dark || light == null) this.dark else light
 
+    /** The accent shown first in the picker swatch: the light variant's, or the dark one's for dark-only palettes. */
+    private val swatchPrimary: Color get() = (light ?: dark).primary
+
+    /** Hue of [swatchPrimary] in degrees (0 = red), or null when the accent is grey. */
+    val hue: Float?
+        get() {
+            val c = swatchPrimary
+            val max = maxOf(c.red, c.green, c.blue)
+            val min = minOf(c.red, c.green, c.blue)
+            val delta = max - min
+            if (max == 0f || delta / max < GREY_SATURATION) return null
+            val h = when (max) {
+                c.red -> ((c.green - c.blue) / delta).mod(6f)
+                c.green -> (c.blue - c.red) / delta + 2f
+                else -> (c.red - c.green) / delta + 4f
+            }
+            return h * 60f
+        }
+
+    /** How light the swatch looks overall: the mean luminance of both backgrounds and the accent. */
+    val brightness: Float
+        get() = listOf((light ?: dark).background, dark.background, swatchPrimary).map { it.luminance() }.average().toFloat()
+
     companion object {
         fun fromId(id: String): Palette = entries.firstOrNull { it.id == id } ?: Harbor
+
+        /** Accents below this HSV saturation count as grey and sort after every hue. */
+        private const val GREY_SATURATION = 0.15f
+
+        private val hueOrder = compareBy<Palette> { it.hue == null }.thenBy { it.hue ?: 0f }
+
+        /**
+         * Palettes with light and dark variants, laid out for the picker as [columns] columns ordered by
+         * hue from red around the wheel (grey accents last), each column ordered lightest to darkest.
+         * The last column can be shorter.
+         */
+        fun grid(columns: Int = 6): List<List<Palette>> {
+            val byHue = entries.filterNot { it.darkOnly }.sortedWith(hueOrder)
+            val perColumn = (byHue.size + columns - 1) / columns
+            return byHue.chunked(perColumn).map { column -> column.sortedByDescending { it.brightness } }
+        }
+
+        /** Dark-only palettes, ordered by hue; the picker shows them as their own row under [grid]. */
+        fun darkOnlyRow(): List<Palette> = entries.filter { it.darkOnly }.sortedWith(hueOrder)
     }
 }
 
