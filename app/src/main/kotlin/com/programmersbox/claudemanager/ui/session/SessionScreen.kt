@@ -70,6 +70,7 @@ import com.programmersbox.claudemanager.ui.motion.EmphasizedDecelerate
 import com.programmersbox.claudemanager.ui.motion.RollingText
 import com.programmersbox.claudemanager.ui.motion.sessionContainer
 import com.programmersbox.claudemanager.ui.navigation.Navigator
+import com.programmersbox.claudemanager.ui.theme.TerminalColors
 import com.programmersbox.claudemanager.ui.timeline.Segmented
 import com.programmersbox.claudemanager.ui.timeline.TimelineView
 import com.programmersbox.claudemanager.ui.timeline.TimelineWindows
@@ -439,7 +440,7 @@ private fun ToolLog(calls: List<ToolCall>) {
     }
 }
 
-private val TermBg = Color(0xFF151821)
-private val TermFg = Color(0xFFC9D1E3)
-private val TermDim = Color(0xFF6F7891)
+private val TermBg = TerminalColors.background
+private val TermFg = TerminalColors.text
+private val TermDim = TerminalColors.dim
 
