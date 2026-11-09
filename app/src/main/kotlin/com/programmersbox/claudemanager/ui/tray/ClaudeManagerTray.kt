@@ -9,6 +9,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 import com.programmersbox.claudemanager.data.SessionRepository
+import com.programmersbox.claudemanager.data.runningChildren
+import com.programmersbox.claudemanager.data.runningTasks
+import com.programmersbox.claudemanager.data.visibleShells
 import com.programmersbox.claudemanager.data.cost.CostEstimate
 import com.programmersbox.claudemanager.data.registry.SessionStatus
 import com.programmersbox.claudemanager.data.settings.SettingsRepository
@@ -39,7 +42,8 @@ fun ClaudeManagerTray(
     val sessions = state.sessions
     val waiting = sessions.filter { it.live.status == SessionStatus.Waiting }
     val agents = sessions.sumOf { s -> s.activity.subagents.count { it.running } }
-    val shells = sessions.sumOf { it.shells.size }
+    val shells = sessions.sumOf { it.visibleShells.size }
+    val tasks = sessions.sumOf { it.runningTasks().size }
 
     fun open(sessionId: String, timeline: Boolean = false) {
         navigator.openSession(sessionId, timeline)
@@ -58,6 +62,7 @@ fun ClaudeManagerTray(
                 append("${sessions.size} session${if (sessions.size == 1) "" else "s"}")
                 if (agents > 0) append(" · $agents agent${if (agents == 1) "" else "s"}")
                 if (shells > 0) append(" · $shells shell${if (shells == 1) "" else "s"}")
+                if (tasks > 0) append(" · $tasks monitor${if (tasks == 1) "" else "s"}/workflow${if (tasks == 1) "" else "s"}")
                 if (settings.showCost) append(" · ${formatCost(sessions.fold(CostEstimate.Zero) { acc, it -> acc + it.activity.cost })}")
             },
             isEnabled = false,
@@ -76,7 +81,7 @@ fun ClaudeManagerTray(
             Item(label = "No sessions running", isEnabled = false)
         }
         sessions.forEach { s ->
-            val running = s.activity.subagents.count { it.running } + s.shells.size
+            val running = s.runningChildren()
             val detail = when {
                 running > 0 -> "${s.live.status.label()} · $running running"
                 else -> s.live.status.label()

@@ -62,6 +62,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.programmersbox.claudemanager.data.SessionSummary
 import com.programmersbox.claudemanager.data.ShellInfo
+import com.programmersbox.claudemanager.data.visibleShells
+import com.programmersbox.claudemanager.data.transcript.BackgroundTask
+import com.programmersbox.claudemanager.data.transcript.TaskKind
 import com.programmersbox.claudemanager.data.registry.SessionStatus
 import com.programmersbox.claudemanager.data.transcript.SubagentInfo
 import com.programmersbox.claudemanager.data.transcript.ToolCall
@@ -267,7 +270,8 @@ private fun Header(s: SessionSummary, now: Long, showCost: Boolean) {
             if (showCost) Stat("Est. cost", formatCost(a.cost))
             Stat("Tool calls", a.toolCount.toString())
             Stat("Agents", a.subagents.size.toString())
-            Stat("Shells", s.shells.size.toString())
+            Stat("Shells", s.visibleShells.size.toString())
+            s.activity.tasks.size.takeIf { it > 0 }?.let { Stat("Monitors & workflows", it.toString()) }
         }
     }
 }
@@ -309,6 +313,20 @@ private fun ChildrenList(s: SessionSummary, now: Long, selected: String, onSelec
                 modifier = Modifier.animateItem(),
             )
         }
+        items(s.activity.tasks.sortedWith(compareByDescending<BackgroundTask> { it.isRunning(now) }.thenByDescending { it.startedAt }), key = { "task:${it.toolUseId}" }) { task ->
+            val running = task.isRunning(now)
+            ChildRow(
+                selected = selected == "task:${task.toolUseId}",
+                onClick = { onSelect("task:${task.toolUseId}") },
+                status = if (running) SessionStatus.Working else SessionStatus.Idle,
+                kind = if (task.kind == TaskKind.Monitor) "monitor" else "workflow",
+                name = task.label,
+                activity = taskActivity(task, running),
+                elapsed = formatElapsed(task.startedAt, if (running) now else task.endTime(now) ?: now),
+                indent = true,
+                modifier = Modifier.animateItem(),
+            )
+        }
         items(s.devices, key = { "d:${it.serial}" }) { device ->
             ChildRow(
                 selected = false,
@@ -322,7 +340,7 @@ private fun ChildrenList(s: SessionSummary, now: Long, selected: String, onSelec
                 modifier = Modifier.animateItem(),
             )
         }
-        items(s.shells, key = { "shell:${it.pid}" }) { shell ->
+        items(s.visibleShells, key = { "shell:${it.pid}" }) { shell ->
             ChildRow(
                 selected = selected == "shell:${shell.pid}",
                 onClick = { onSelect("shell:${shell.pid}") },
@@ -373,13 +391,8 @@ private fun ChildRow(
 /** Details of whatever is selected in Tree or Timeline; slides in on each new selection. */
 @Composable
 private fun Inspector(s: SessionSummary, selected: String, now: Long, vm: SessionViewModel, modifier: Modifier) {
-    val agent = selected.removePrefix("a:").takeIf { selected.startsWith("a:") }?.let { id -> s.activity.subagents.firstOrNull { it.id == id } }
-    val shell = selected.removePrefix("shell:").toLongOrNull()?.let { pid -> s.shells.firstOrNull { it.pid == pid } }
-    val key = when {
-        agent != null -> selected
-        shell != null -> selected
-        else -> "main"
-    }
+    // Fall back to the main thread when the selected item no longer exists.
+    val key = if (resolveSelection(s, selected) != null) selected else "main"
     AnimatedContent(
         targetState = key,
         transitionSpec = {
@@ -388,14 +401,25 @@ private fun Inspector(s: SessionSummary, selected: String, now: Long, vm: Sessio
         modifier = modifier,
         label = "inspector",
     ) { target ->
+        // Resolve from this panel's own key: the outgoing panel must keep showing its old item
+        // while it fades, not the new selection (that drew two copies of the new panel).
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            when {
-                target.startsWith("a:") && agent != null -> AgentDetails(agent, now)
-                target.startsWith("shell:") && shell != null -> ShellDetails(shell, s, now, vm)
+            when (val item = resolveSelection(s, target)) {
+                is SubagentInfo -> AgentDetails(item, now)
+                is ShellInfo -> ShellDetails(item, s, now, vm)
+                is BackgroundTask -> TaskDetails(item, s, now, vm)
                 else -> MainDetails(s, vm)
             }
         }
     }
+}
+
+/** The agent, shell or task a selection key names, or null for the main thread / a missing item. */
+private fun resolveSelection(s: SessionSummary, key: String): Any? = when {
+    key.startsWith("a:") -> key.removePrefix("a:").let { id -> s.activity.subagents.firstOrNull { it.id == id } }
+    key.startsWith("shell:") -> key.removePrefix("shell:").toLongOrNull()?.let { pid -> s.shells.firstOrNull { it.pid == pid } }
+    key.startsWith("task:") -> key.removePrefix("task:").let { id -> s.activity.tasks.firstOrNull { it.toolUseId == id } }
+    else -> null
 }
 
 @Composable
@@ -473,6 +497,84 @@ private fun ShellDetails(shell: ShellInfo, s: SessionSummary, now: Long, vm: Ses
             body = "${shell.command.firstLine(200)}\n\npid ${shell.pid} and the processes it started will be ended. Claude sees the command fail.",
             confirmLabel = "Kill",
             onConfirm = { confirmKill = false; killFailed = !vm.killShell(shell.pid) },
+            onDismiss = { confirmKill = false },
+        )
+    }
+}
+
+private fun taskActivity(task: BackgroundTask, running: Boolean): String = when (task.kind) {
+    TaskKind.Monitor -> {
+        val events = "${task.eventCount} event${if (task.eventCount == 1) "" else "s"}"
+        val last = task.lastEvent?.firstLine(80)?.let { " · $it" }.orEmpty()
+        if (running) events + last else "${task.status.name.lowercase().replaceFirstChar { it.uppercase() }} · $events"
+    }
+    TaskKind.Workflow -> when {
+        running && task.phases.isNotEmpty() -> "Phases: ${task.phases.joinToString(" → ")}"
+        running -> task.detail ?: "Running"
+        else -> task.status.name.lowercase().replaceFirstChar { it.uppercase() }
+    }
+}
+
+@Composable
+private fun TaskDetails(task: BackgroundTask, s: SessionSummary, now: Long, vm: SessionViewModel) {
+    var confirmKill by remember { mutableStateOf(false) }
+    var killFailed by remember { mutableStateOf(false) }
+    val running = task.isRunning(now)
+    val process = s.shells.firstOrNull { it.monitorOf == task.toolUseId }
+    val kind = if (task.kind == TaskKind.Monitor) "Monitor" else "Workflow"
+    Title(
+        "$kind · ${task.label}",
+        if (running) SessionStatus.Working else SessionStatus.Idle,
+        if (running) "Running" else task.status.name.lowercase().replaceFirstChar { it.uppercase() },
+    )
+    task.detail?.let {
+        Label(if (task.kind == TaskKind.Monitor) "Watching" else "Description")
+        if (task.kind == TaskKind.Monitor) {
+            Text(
+                it,
+                Modifier.fillMaxWidth().background(TermBg, RoundedCornerShape(8.dp)).padding(10.dp),
+                color = TermFg,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+        } else {
+            Message(it)
+        }
+    }
+    KeyValues(
+        *listOfNotNull(
+            "Task id" to (task.taskId ?: "—"),
+            "Started" to clock.format(Instant.ofEpochMilli(task.startedAt)),
+            "Elapsed" to formatElapsed(task.startedAt, if (running) now else task.endTime(now) ?: now),
+            task.timeoutMs?.let { "Timeout" to "${it / 60_000} min" },
+            ("Events" to task.eventCount.toString()).takeIf { task.kind == TaskKind.Monitor },
+            process?.let { "PID" to it.pid.toString() },
+        ).toTypedArray(),
+    )
+    if (task.phases.isNotEmpty()) {
+        Label("Phases")
+        Message(task.phases.joinToString("  →  "))
+    }
+    task.lastEvent?.let {
+        Label("Latest event" + (task.lastEventAt?.let { at -> " · " + clock.format(Instant.ofEpochMilli(at)) } ?: ""))
+        Text(
+            it.take(1200),
+            Modifier.fillMaxWidth().background(TermBg, RoundedCornerShape(8.dp)).padding(10.dp),
+            color = TermFg,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.5.sp,
+        )
+    }
+    if (process != null) {
+        Button(onClick = { confirmKill = true }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Stop monitor") }
+        if (killFailed) Text("Could not stop the monitor. Its process may already have exited.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+    }
+    if (confirmKill && process != null) {
+        ConfirmDialog(
+            title = "Stop this monitor?",
+            body = "${task.label}\n\nIts process (pid ${process.pid}) is ended. Claude stops receiving its events.",
+            confirmLabel = "Stop monitor",
+            onConfirm = { confirmKill = false; killFailed = !vm.killShell(process.pid) },
             onDismiss = { confirmKill = false },
         )
     }

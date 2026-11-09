@@ -33,6 +33,8 @@ data class ShellInfo(
     val startedAt: Long,
     val cpuPercent: Float,
     val memoryBytes: Long,
+    /** Tool-use id of the Monitor this shell runs, if any; shown under the monitor instead. */
+    val monitorOf: String? = null,
 )
 
 data class SessionSummary(
@@ -44,6 +46,15 @@ data class SessionSummary(
     /** Devices this session holds through Claude Device Manager. */
     val devices: List<CdmDevice> = emptyList(),
 )
+
+/** Shells that aren't a monitor's process (those show under their monitor). */
+val SessionSummary.visibleShells: List<ShellInfo> get() = shells.filter { it.monitorOf == null }
+
+fun SessionSummary.runningTasks(now: Long = System.currentTimeMillis()) = activity.tasks.filter { it.isRunning(now) }
+
+/** Running agents, shells, monitors and workflows. */
+fun SessionSummary.runningChildren(now: Long = System.currentTimeMillis()): Int =
+    activity.subagents.count { it.running } + visibleShells.size + runningTasks(now).size
 
 data class SessionsState(
     val sessions: List<SessionSummary> = emptyList(),
@@ -89,6 +100,10 @@ class SessionRepository(
             val label = labelsById[s.sessionId]
             val activity = runCatching { transcripts.activity(s.sessionId) }.getOrDefault(SessionActivity())
             val background = activity.backgroundCommands.associateBy { it.command.trim() }
+            val now = System.currentTimeMillis()
+            val monitors = activity.tasks
+                .filter { it.kind == com.programmersbox.claudemanager.data.transcript.TaskKind.Monitor && it.isRunning(now) && it.detail != null }
+                .associateBy { it.detail!!.trim() }
             SessionSummary(
                 live = s,
                 displayName = label?.customName?.takeIf { it.isNotBlank() } ?: s.name,
@@ -98,7 +113,17 @@ class SessionRepository(
                     val bg = background[p.command.trim()]
                     // A foreground shell is the Bash call in progress: label it with that call's description.
                     val foreground = activity.current?.takeIf { bg == null && it.name == "Bash" }?.summary?.removePrefix("Bash · ")
-                    ShellInfo(p.pid, p.command, bg?.description ?: foreground, bg != null, p.startedAt, p.cpuPercent, p.memoryBytes)
+                    val monitor = monitors[p.command.trim()]
+                    ShellInfo(
+                        pid = p.pid,
+                        command = p.command,
+                        description = monitor?.label ?: bg?.description ?: foreground,
+                        background = bg != null || monitor != null,
+                        startedAt = p.startedAt,
+                        cpuPercent = p.cpuPercent,
+                        memoryBytes = p.memoryBytes,
+                        monitorOf = monitor?.toolUseId,
+                    )
                 }.sortedBy { it.startedAt },
                 devices = devicesByHolder[s.sessionId].orEmpty(),
             )

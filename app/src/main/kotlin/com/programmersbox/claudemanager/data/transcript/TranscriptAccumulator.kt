@@ -33,6 +33,11 @@ class TranscriptAccumulator {
     private val backgroundByToolId = LinkedHashMap<String, BackgroundCommand>()
     private val backgroundTaskToToolId = HashMap<String, String>()
     private val toolTimesList = ArrayDeque<Long>()
+    private val tasksByToolId = LinkedHashMap<String, BackgroundTask>()
+    private val taskIdToToolId = HashMap<String, String>()
+    /** TaskStop calls waiting for their result: tool id of the stop -> task id it stops. */
+    private val pendingStops = HashMap<String, String>()
+    private var sawQueuedNotifications = false
 
     val outputTokens: Long get() = outputByMessage.values.sum()
     val toolCount: Int get() = tools.size
@@ -40,6 +45,8 @@ class TranscriptAccumulator {
     val current: ToolCall? get() = tools.values.lastOrNull()?.takeIf { !it.done }
     fun recent(n: Int): List<ToolCall> = tools.values.toList().takeLast(n).reversed()
     val backgroundCommands: List<BackgroundCommand> get() = backgroundByToolId.values.toList()
+
+    val tasks: List<BackgroundTask> get() = tasksByToolId.values.toList()
 
     /** Start times of the most recent tool calls, oldest first (capped). */
     val toolTimes: List<Long> get() = toolTimesList.toList()
@@ -53,6 +60,11 @@ class TranscriptAccumulator {
             "ai-title" -> record.str("aiTitle")?.let { title = it }
             "assistant" -> onAssistant(record, at)
             "user" -> onUser(record, at)
+            // Background-task notifications are queued before they reach the model; the queue
+            // has every one, while only some are also written as user messages.
+            "queue-operation" -> if (record.str("operation") == "enqueue") {
+                record.str("content")?.let { onNotification(it, at, fromQueue = true) }
+            }
         }
     }
 
@@ -91,6 +103,30 @@ class TranscriptAccumulator {
                         toolTimesList.addLast(at)
                         if (toolTimesList.size > MAX_TOOL_TIMES) toolTimesList.removeFirst()
                     }
+                    when (name) {
+                        "Monitor" -> tasksByToolId[id] = BackgroundTask(
+                            toolUseId = id,
+                            kind = TaskKind.Monitor,
+                            label = input?.str("description") ?: input?.str("command")?.lineSequence()?.first() ?: "Monitor",
+                            detail = input?.str("command") ?: input?.obj("ws")?.str("url"),
+                            startedAt = at ?: 0,
+                            timeoutMs = input?.let { (it["timeout_ms"] as? JsonPrimitive)?.longOrNull } ?: DEFAULT_MONITOR_TIMEOUT_MS,
+                        )
+                        "Workflow" -> {
+                            val script = input?.str("script").orEmpty()
+                            tasksByToolId[id] = BackgroundTask(
+                                toolUseId = id,
+                                kind = TaskKind.Workflow,
+                                label = META_NAME.find(script)?.groupValues?.get(1) ?: input?.str("name") ?: "Workflow",
+                                detail = META_DESCRIPTION.find(script)?.groupValues?.get(1),
+                                startedAt = at ?: 0,
+                                // The meta block is a pure literal at the top of the script, ending at the first unindented "}".
+                                phases = PHASE_TITLE.findAll(script.substringAfter("meta", "").substringBefore("\n}").substringAfter("phases", ""))
+                                    .map { it.groupValues[1] }.toList(),
+                            )
+                        }
+                        "TaskStop" -> (input?.str("task_id") ?: input?.str("shell_id"))?.let { pendingStops[id] = it }
+                    }
                     if (name == "Bash" && input?.bool("run_in_background") == true) {
                         backgroundByToolId[id] = BackgroundCommand(
                             taskId = null,
@@ -113,10 +149,11 @@ class TranscriptAccumulator {
             if (block.str("type") == "tool_result") {
                 val id = block.str("tool_use_id") ?: return@forEach
                 tools[id]?.let { tools[id] = it.copy(done = true) }
+                pendingStops.remove(id)?.let { taskId -> endTask(taskId, TaskStatus.Stopped, at) }
             }
-            if (block.str("type") == "text") block.str("text")?.let(::onNotification)
+            if (block.str("type") == "text") block.str("text")?.let { onNotification(it, at) }
         }
-        (content as? JsonPrimitive)?.contentOrNull?.let(::onNotification)
+        (content as? JsonPrimitive)?.contentOrNull?.let { onNotification(it, at) }
 
         val result = record["toolUseResult"] as? JsonObject
         val taskId = result?.str("backgroundTaskId")
@@ -125,23 +162,73 @@ class TranscriptAccumulator {
             backgroundTaskToToolId[taskId] = toolId
             backgroundByToolId[toolId]?.let { backgroundByToolId[toolId] = it.copy(taskId = taskId) }
         }
+        // Monitor and Workflow results carry the id their notifications use.
+        if (toolId != null && tasksByToolId.containsKey(toolId)) {
+            val id = result?.let { r -> listOf("taskId", "task_id", "runId", "run_id", "workflowRunId").firstNotNullOfOrNull { r.str(it) } }
+            if (id != null) {
+                taskIdToToolId[id] = toolId
+                tasksByToolId[toolId] = tasksByToolId.getValue(toolId).copy(taskId = id)
+            }
+        }
     }
 
-    /** `<task-notification>` messages mark background work as finished. */
-    private fun onNotification(text: String) {
-        if ("<task-notification>" !in text) return
-        val taskId = TASK_ID.find(text)?.groupValues?.get(1) ?: return
-        val status = STATUS.find(text)?.groupValues?.get(1) ?: return
-        if (status == "running") return
-        val toolId = backgroundTaskToToolId[taskId] ?: return
-        backgroundByToolId[toolId]?.let { backgroundByToolId[toolId] = it.copy(finished = true) }
+    private fun endTask(taskId: String, status: TaskStatus, at: Long?) {
+        val toolId = taskIdToToolId[taskId] ?: return
+        tasksByToolId[toolId]?.takeIf { it.status == TaskStatus.Running }?.let {
+            tasksByToolId[toolId] = it.copy(status = status, endedAt = at ?: it.lastEventAt ?: it.startedAt)
+        }
     }
+
+    /**
+     * `<task-notification>` messages carry monitor events and mark background work (shell
+     * commands, monitors, workflows) as finished.
+     */
+    private fun onNotification(text: String, at: Long?, fromQueue: Boolean = false) {
+        if ("<task-notification>" !in text) return
+        if (fromQueue) sawQueuedNotifications = true
+        // Count events from the queue when the transcript has one, else from user messages.
+        val countEvents = fromQueue || !sawQueuedNotifications
+        TASK_NOTIFICATION.findAll(text).forEach { match -> onTaskNotification(match.value, at, countEvents) }
+    }
+
+    private fun onTaskNotification(text: String, at: Long?, countEvents: Boolean) {
+        val taskId = TASK_ID.find(text)?.groupValues?.get(1)?.trim() ?: return
+        EVENT.find(text)?.groupValues?.get(1)?.takeIf { countEvents }?.let { event ->
+            taskIdToToolId[taskId]?.let { toolId ->
+                tasksByToolId[toolId]?.let {
+                    tasksByToolId[toolId] = it.copy(eventCount = it.eventCount + 1, lastEvent = unescape(event).trim(), lastEventAt = at)
+                }
+            }
+        }
+        val status = STATUS.find(text)?.groupValues?.get(1)?.trim()?.lowercase() ?: return
+        if (status == "running") return
+        backgroundTaskToToolId[taskId]?.let { toolId ->
+            backgroundByToolId[toolId]?.let { backgroundByToolId[toolId] = it.copy(finished = true) }
+        }
+        endTask(
+            taskId,
+            when {
+                status.startsWith("complete") || status == "success" || status == "succeeded" -> TaskStatus.Completed
+                status.startsWith("fail") || status == "error" -> TaskStatus.Failed
+                else -> TaskStatus.Stopped
+            },
+            at,
+        )
+    }
+
+    private fun unescape(s: String) = s.replace("&gt;", ">").replace("&lt;", "<").replace("&quot;", "\"").replace("&amp;", "&")
 
     companion object {
         private const val MAX_TOOL_TIMES = 2_000
         private val json = Json { ignoreUnknownKeys = true }
+        private const val DEFAULT_MONITOR_TIMEOUT_MS = 300_000L
+        private val TASK_NOTIFICATION = Regex("<task-notification>.*?</task-notification>|<task-notification>.*\\z", RegexOption.DOT_MATCHES_ALL)
         private val TASK_ID = Regex("<task-id>([^<]+)</task-id>")
         private val STATUS = Regex("<status>([^<]+)</status>")
+        private val EVENT = Regex("<event>(.*?)</event>", RegexOption.DOT_MATCHES_ALL)
+        private val META_NAME = Regex("""meta\s*=\s*\{[^}]*?name\s*:\s*['"`]([^'"`]+)['"`]""", RegexOption.DOT_MATCHES_ALL)
+        private val META_DESCRIPTION = Regex("""meta\s*=\s*\{[^}]*?description\s*:\s*['"`]([^'"`]+)['"`]""", RegexOption.DOT_MATCHES_ALL)
+        private val PHASE_TITLE = Regex("""title\s*:\s*['"`]([^'"`]+)['"`]""")
 
         fun summarize(name: String, input: JsonObject?): String {
             if (input == null) return name

@@ -5,6 +5,8 @@ import com.programmersbox.claudemanager.data.SessionsState
 import com.programmersbox.claudemanager.data.db.SessionRecordEntity
 import com.programmersbox.claudemanager.data.db.StatusSegmentEntity
 import com.programmersbox.claudemanager.data.registry.SessionStatus
+import com.programmersbox.claudemanager.data.transcript.BackgroundTask
+import com.programmersbox.claudemanager.data.transcript.TaskKind
 
 enum class SegStatus { Working, Waiting, Idle, Done, Unknown }
 
@@ -50,6 +52,7 @@ object TimelineBuilder {
                 segments = mainSegments(s.live.startedAt, own),
                 ticks = s.activity.toolTimes,
                 minis = s.activity.subagents.map { listOf(agentSeg(it.startedAt, it.lastActivityAt, it.running)) } +
+                    s.activity.tasks.map { listOf(taskSeg(it)) } +
                     own.filter { it.subject.startsWith("shell:") }.groupBy { it.subject }.values.map { shellSegs(it) },
             )
         }
@@ -96,10 +99,24 @@ object TimelineBuilder {
                 ticks = a.toolTimes,
             )
         }
+        val now = System.currentTimeMillis()
+        val tasks = session.activity.tasks.sortedByDescending { it.startedAt }.map { t ->
+            TimelineLane(
+                key = "task:${t.toolUseId}",
+                sessionId = sid,
+                kind = if (t.kind == TaskKind.Monitor) "monitor" else "workflow",
+                label = t.label,
+                sublabel = null,
+                status = if (t.isRunning(now)) SessionStatus.Working else SessionStatus.Idle,
+                ended = !t.isRunning(now),
+                segments = listOf(taskSeg(t)),
+            )
+        }
+        val monitorShells = session.shells.filter { it.monitorOf != null }.map { "shell:${it.pid}" }.toSet()
         val liveShells = session.shells.map { "shell:${it.pid}" }.toSet()
         // One-off foreground commands live for seconds; only shells still running or that ran a
         // while get a lane, so the timeline isn't buried under every Bash call.
-        val shells = segments.filter { it.subject.startsWith("shell:") }.groupBy { it.subject }.filter { (subject, segs) ->
+        val shells = segments.filter { it.subject.startsWith("shell:") && it.subject !in monitorShells }.groupBy { it.subject }.filter { (subject, segs) ->
             subject in liveShells || segs.sumOf { (it.endAt ?: Long.MAX_VALUE) - it.startAt } >= MIN_SHELL_LANE_MS
         }.map { (subject, segs) ->
             val running = subject in liveShells
@@ -114,7 +131,7 @@ object TimelineBuilder {
                 segments = shellSegs(segs),
             )
         }
-        return listOf(main) + agents + shells
+        return listOf(main) + agents + tasks + shells
     }
 
     /** Recorded main-thread segments, with the time before recording began shown as unknown. */
@@ -131,6 +148,12 @@ object TimelineBuilder {
 
     private fun agentSeg(start: Long?, last: Long?, running: Boolean) =
         Seg(start ?: last ?: 0, if (running) null else last, if (running) SegStatus.Working else SegStatus.Done)
+
+    private fun taskSeg(t: BackgroundTask): Seg {
+        val now = System.currentTimeMillis()
+        val running = t.isRunning(now)
+        return Seg(t.startedAt, if (running) null else t.endTime(now) ?: t.lastEventAt ?: t.startedAt, if (running) SegStatus.Working else SegStatus.Done)
+    }
 
     private fun shellSegs(segs: List<StatusSegmentEntity>) = segs.sortedBy { it.startAt }.map { it.toSeg() }
 

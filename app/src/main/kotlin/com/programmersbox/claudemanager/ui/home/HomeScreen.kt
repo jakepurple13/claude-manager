@@ -61,6 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.programmersbox.claudemanager.data.SessionSummary
+import com.programmersbox.claudemanager.data.runningTasks
+import com.programmersbox.claudemanager.data.visibleShells
+import com.programmersbox.claudemanager.data.transcript.TaskKind
 import com.programmersbox.claudemanager.data.process.ShellProcess
 import com.programmersbox.claudemanager.data.registry.SessionStatus
 import com.programmersbox.claudemanager.ui.components.ConfirmDialog
@@ -164,7 +167,8 @@ private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, totalC
         Stat(sessions.size, "sessions")
         Stat(sessions.count { it.live.status == SessionStatus.Working }, "working")
         Stat(sessions.sumOf { s -> s.activity.subagents.count { it.running } }, "agents running")
-        Stat(sessions.sumOf { it.shells.size }, "shells")
+        Stat(sessions.sumOf { it.visibleShells.size }, "shells")
+        sessions.sumOf { it.runningTasks().size }.takeIf { it > 0 }?.let { Stat(it, "monitors & workflows") }
         devicesHeld?.let { Stat(it, "devices held") }
         totalCost?.let {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -247,7 +251,9 @@ internal fun SessionCard(
     )
     val kids = activity.subagents.filter { it.running }.map {
         KidRow("a:${it.id}", "agent", "${it.type} · ${it.description}", SessionStatus.Working, it.startedAt)
-    } + session.shells.map {
+    } + session.runningTasks(now).map {
+        KidRow("t:${it.toolUseId}", if (it.kind == TaskKind.Monitor) "monitor" else "workflow", it.label, SessionStatus.Working, it.startedAt)
+    } + session.visibleShells.map {
         KidRow("s:${it.pid}", "shell", it.description ?: it.command.firstLine(), SessionStatus.Working, it.startedAt)
     } + session.devices.map {
         KidRow("d:${it.serial}", "device", "${it.model} · ${it.platform} ${if (it.real) "real" else "virtual"}", SessionStatus.Working, null)

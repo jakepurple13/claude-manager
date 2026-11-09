@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.programmersbox.claudemanager.data.SessionSummary
+import com.programmersbox.claudemanager.data.runningChildren
 import com.programmersbox.claudemanager.ui.components.StatusDot
 import com.programmersbox.claudemanager.ui.components.label
 
@@ -138,7 +139,7 @@ fun SessionRail(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    val running = s.activity.subagents.count { it.running } + s.shells.size
+                                    val running = s.runningChildren()
                                     Text(
                                         s.live.status.label() + if (running > 0) " · $running running" else "",
                                         fontSize = 11.5.sp,

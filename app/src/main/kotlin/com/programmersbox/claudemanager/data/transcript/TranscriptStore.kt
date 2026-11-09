@@ -47,6 +47,7 @@ class TranscriptStore(private val paths: ClaudePaths) {
             backgroundCommands = main.backgroundCommands,
             toolTimes = main.toolTimes,
             cost = agents.fold(main.cost) { acc, a -> acc + a.cost },
+            tasks = main.tasks,
         )
     }
 

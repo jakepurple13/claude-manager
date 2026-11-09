@@ -37,6 +37,40 @@ data class BackgroundCommand(
     val finished: Boolean,
 )
 
+enum class TaskKind { Monitor, Workflow }
+
+enum class TaskStatus { Running, Completed, Failed, Stopped }
+
+/**
+ * A Monitor or Workflow the session started. Both run in the background, report through
+ * `<task-notification>` messages, and end with a status (or, for a monitor, its timeout).
+ */
+data class BackgroundTask(
+    val toolUseId: String,
+    val kind: TaskKind,
+    val taskId: String? = null,
+    /** The description (monitor) or workflow name. */
+    val label: String,
+    /** The watched command (monitor) or the workflow's own description. */
+    val detail: String?,
+    val startedAt: Long,
+    val timeoutMs: Long? = null,
+    val status: TaskStatus = TaskStatus.Running,
+    val endedAt: Long? = null,
+    val eventCount: Int = 0,
+    val lastEvent: String? = null,
+    val lastEventAt: Long? = null,
+    /** Workflow phase titles from the script's `meta` block. */
+    val phases: List<String> = emptyList(),
+) {
+    /** Running, unless it reported an end or a monitor has passed its timeout. */
+    fun isRunning(now: Long): Boolean =
+        status == TaskStatus.Running && (timeoutMs == null || now < startedAt + timeoutMs)
+
+    /** When it stopped: its reported end, or a monitor's timeout. */
+    fun endTime(now: Long): Long? = endedAt ?: timeoutMs?.let { startedAt + it }?.takeIf { it <= now }
+}
+
 /** Everything Claude Manager derives from a session's transcript. */
 data class SessionActivity(
     val title: String? = null,
@@ -55,4 +89,5 @@ data class SessionActivity(
     val toolTimes: List<Long> = emptyList(),
     /** API-equivalent cost of the main thread plus all subagents. */
     val cost: CostEstimate = CostEstimate.Zero,
+    val tasks: List<BackgroundTask> = emptyList(),
 )
