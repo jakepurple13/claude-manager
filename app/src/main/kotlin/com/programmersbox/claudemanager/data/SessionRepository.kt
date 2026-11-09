@@ -4,6 +4,7 @@ import com.programmersbox.claudemanager.AppScope
 import com.programmersbox.claudemanager.data.cdm.CdmClient
 import com.programmersbox.claudemanager.data.cdm.CdmDevice
 import com.programmersbox.claudemanager.data.db.SessionLabelDao
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
 import com.programmersbox.claudemanager.data.db.SessionLabelEntity
 import com.programmersbox.claudemanager.data.process.ProcessScanner
 import com.programmersbox.claudemanager.data.process.ShellProcess
@@ -59,16 +60,17 @@ class SessionRepository(
     private val transcripts: TranscriptStore,
     private val processes: ProcessScanner,
     private val cdm: CdmClient,
+    private val settings: SettingsRepository,
     scope: AppScope,
 ) {
     private val ticks: Flow<Unit> = flow {
         while (true) {
             emit(Unit)
-            delay(REFRESH_MS)
+            delay(settings.settings.value.refreshSeconds.coerceIn(1, 60) * 1000L)
         }
     }
 
-    /** One shared pipeline for the window and the tray, refreshed every [REFRESH_MS]. */
+    /** One shared pipeline for the window and the tray, refreshed at the user's chosen interval. */
     val state: StateFlow<SessionsState> =
         combine(registry.sessions, labels.observeAll(), ticks) { live, labelList, _ -> live to labelList }
             .conflate()
@@ -122,7 +124,4 @@ class SessionRepository(
     /** Ends a shell and the processes it started. */
     fun killShell(pid: Long): Boolean = processes.kill(pid)
 
-    private companion object {
-        const val REFRESH_MS = 2_000L
-    }
 }

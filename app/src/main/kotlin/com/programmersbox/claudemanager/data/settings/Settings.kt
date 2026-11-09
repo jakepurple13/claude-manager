@@ -1,5 +1,6 @@
 package com.programmersbox.claudemanager.data.settings
 
+import androidx.room3.ColumnInfo
 import androidx.room3.Dao
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
@@ -25,6 +26,10 @@ data class AppSettings(
     val minTurnSeconds: Int = 20,
     /** Status history older than this is deleted at startup. */
     val historyDays: Int = 7,
+    /** "system", "light" or "dark". */
+    @ColumnInfo(defaultValue = "system") val themeMode: String = "system",
+    /** How often sessions, shells and transcripts are re-read. */
+    @ColumnInfo(defaultValue = "2") val refreshSeconds: Int = 2,
 )
 
 @Dao

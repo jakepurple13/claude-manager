@@ -7,6 +7,8 @@ import com.programmersbox.claudemanager.data.db.StatusSegmentEntity
 import com.programmersbox.claudemanager.data.settings.SettingsRepository
 import com.programmersbox.claudemanager.util.firstLine
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 
 /**
@@ -24,6 +26,7 @@ class HistoryRecorder(
     private data class Desired(val sessionId: String, val subject: String, val label: String, val status: String)
 
     private val open = HashMap<Pair<String, String>, Open>()
+    private val lock = Mutex()
     private val lastRecordWrite = HashMap<String, Long>()
     private var job: Job? = null
 
@@ -35,8 +38,19 @@ class HistoryRecorder(
             val retentionMs = settings.current().historyDays * DAY_MS
             history.deleteSegmentsBefore(now - retentionMs)
             history.deleteSessionsBefore(now - retentionMs)
-            repository.state.collect { state -> if (state.loaded) record(state, System.currentTimeMillis()) }
+            repository.state.collect { state -> if (state.loaded) lock.withLock { record(state, System.currentTimeMillis()) } }
         }
+    }
+
+    /**
+     * Deletes all recorded history (labels stay). Current statuses start fresh segments on the
+     * next refresh because the recorder forgets what it had open.
+     */
+    suspend fun clearHistory() = lock.withLock {
+        history.deleteAllSegments()
+        history.deleteAllSessions()
+        open.clear()
+        lastRecordWrite.clear()
     }
 
     private suspend fun record(state: SessionsState, now: Long) {

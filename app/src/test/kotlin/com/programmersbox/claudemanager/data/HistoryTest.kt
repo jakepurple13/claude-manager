@@ -51,6 +51,18 @@ class HistoryTest {
     }
 
     @Test
+    fun clearDeletesHistoryButNotLabels() = runBlocking {
+        db.sessionLabelDao().upsert(com.programmersbox.claudemanager.data.db.SessionLabelEntity("s1", customName = "mine", pinned = true))
+        dao.upsertSession(SessionRecordEntity("s1", "one", "/tmp", "Terminal", 1, startedAt = 1, lastSeenAt = 2))
+        dao.insertSegment(StatusSegmentEntity(sessionId = "s1", subject = "main", label = "one", status = "Working", startAt = 1))
+        dao.deleteAllSegments()
+        dao.deleteAllSessions()
+        assertEquals(emptyList(), dao.observeSegmentsSince(0).first())
+        assertEquals(emptyList(), dao.observeSessionsSince(0).first())
+        assertEquals("mine", db.sessionLabelDao().get("s1")?.customName)
+    }
+
+    @Test
     fun mainSegmentsMarkUnrecordedTimeAsUnknown() {
         val recorded = listOf(StatusSegmentEntity(sessionId = "s", subject = "main", label = "", status = "Waiting", startAt = 300))
         val segs = TimelineBuilder.mainSegments(startedAt = 100, segments = recorded)

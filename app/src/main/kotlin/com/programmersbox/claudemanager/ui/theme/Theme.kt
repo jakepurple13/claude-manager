@@ -58,7 +58,13 @@ private val Dark = darkColorScheme(
     error = Color(0xFFFF7A7A),
 )
 
+/** [mode] is "system", "light" or "dark", from settings. */
 @Composable
-fun ClaudeManagerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkMode()) Dark else Light, content = content)
+fun ClaudeManagerTheme(mode: String = "system", content: @Composable () -> Unit) {
+    val dark = when (mode) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemInDarkMode()
+    }
+    MaterialTheme(colorScheme = if (dark) Dark else Light, content = content)
 }

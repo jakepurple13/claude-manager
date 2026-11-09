@@ -19,6 +19,9 @@ data class CdmDevice(
     val holderSessionId: String?,
 )
 
+/** What Claude Manager knows about the Device Manager daemon. */
+data class CdmConnection(val installed: Boolean, val port: String?, val reachable: Boolean)
+
 /**
  * Optional, read-only integration with Claude Device Manager. Talks to its local daemon
  * (`GET /cdm/list` on the port in `~/.claude-device-manager/port`); the `cdm` CLI itself refuses
@@ -30,6 +33,10 @@ class CdmClient {
     private val http: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
     private var cached: List<CdmDevice> = emptyList()
     private var cachedAt = 0L
+    @Volatile private var lastPort: String? = null
+    @Volatile private var lastReachable = false
+
+    val connection: CdmConnection get() = CdmConnection(isAvailable, lastPort, lastReachable)
 
     /** True when the Device Manager has been installed on this machine (its port file exists). */
     val isAvailable: Boolean get() = Files.exists(portFile)
@@ -40,14 +47,15 @@ class CdmClient {
         if (now - cachedAt < CACHE_MS) return cached
         cachedAt = now
         cached = runCatching {
-            val port = Files.readString(portFile).trim()
+            val port = Files.readString(portFile).trim().also { lastPort = it }
             val request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port/cdm/list"))
                 .timeout(Duration.ofSeconds(2))
                 .GET()
                 .build()
             val response = http.send(request, HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() == 200) parse(response.body()) else emptyList()
-        }.getOrDefault(emptyList()) // Daemon not running: no devices.
+            lastReachable = response.statusCode() == 200
+            if (lastReachable) parse(response.body()) else emptyList()
+        }.onFailure { lastReachable = false }.getOrDefault(emptyList()) // Daemon not running: no devices.
         return cached
     }
 

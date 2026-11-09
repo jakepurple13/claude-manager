@@ -10,6 +10,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.rememberWindowState
 import com.programmersbox.claudemanager.data.HistoryRecorder
 import com.programmersbox.claudemanager.data.notify.SessionNotifier
+import com.programmersbox.claudemanager.data.settings.SettingsRepository
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.programmersbox.claudemanager.di.appModule
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -30,6 +33,7 @@ fun main(args: Array<String>) {
     koin.get<HistoryRecorder>().start()
     koin.get<SessionNotifier>().start()
     val appWindow = koin.get<AppWindow>()
+    val settings = koin.get<SettingsRepository>()
 
     // dockIconFollowsWindows: on macOS the Dock icon shows only while the main window is open,
     // so closing the window leaves the app running in the menu bar.
@@ -37,7 +41,8 @@ fun main(args: Array<String>) {
         val windowState = rememberWindowState(size = DpSize(1180.dp, 760.dp))
         val navigator = remember { koin.get<Navigator>() }
 
-        ClaudeManagerTheme {
+        val prefs by settings.settings.collectAsState()
+        ClaudeManagerTheme(prefs.themeMode) {
             if (appWindow.visible) {
                 MaterialDecoratedWindow(
                     onCloseRequest = appWindow::hide,

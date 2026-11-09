@@ -229,7 +229,15 @@ private fun OrphanBanner(orphans: List<ShellProcess>, onKill: (Long) -> Boolean)
 private data class KidRow(val key: String, val kind: String, val label: String, val status: SessionStatus, val startedAt: Long?)
 
 @Composable
-private fun SessionCard(session: SessionSummary, now: Long, showCost: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SessionCard(
+    session: SessionSummary,
+    now: Long,
+    showCost: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** False for previews, so they don't take part in the board's card-to-session transition. */
+    shareBounds: Boolean = true,
+) {
     val live = session.live
     val activity = session.activity
     val borderColor by animateColorAsState(
@@ -252,7 +260,7 @@ private fun SessionCard(session: SessionSummary, now: Long, showCost: Boolean, o
     OutlinedCard(
         onClick = onClick,
         modifier = modifier
-            .sessionContainer(live.sessionId)
+            .then(if (shareBounds) Modifier.sessionContainer(live.sessionId) else Modifier)
             .then(
                 if (waiting) Modifier.drawBehind {
                     drawRoundRect(StatusColors.waiting.copy(alpha = glowAlpha), cornerRadius = CornerRadius(14.dp.toPx()), style = Stroke(6.dp.toPx()))

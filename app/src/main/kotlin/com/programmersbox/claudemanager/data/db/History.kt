@@ -74,6 +74,12 @@ interface HistoryDao {
     @Query("DELETE FROM status_segment WHERE endAt IS NOT NULL AND endAt < :before")
     suspend fun deleteSegmentsBefore(before: Long)
 
+    @Query("DELETE FROM status_segment")
+    suspend fun deleteAllSegments()
+
+    @Query("DELETE FROM session_record")
+    suspend fun deleteAllSessions()
+
     @Query("DELETE FROM session_record WHERE lastSeenAt < :before")
     suspend fun deleteSessionsBefore(before: Long)
 
