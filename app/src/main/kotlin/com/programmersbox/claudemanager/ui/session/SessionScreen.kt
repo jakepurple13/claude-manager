@@ -8,7 +8,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.clipToBounds
+import kotlin.math.roundToInt
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -88,6 +96,7 @@ fun SessionScreen(
     navigator: Navigator = koinInject(),
 ) {
     val session by vm.session.collectAsState()
+    val sessions by vm.sessions.collectAsState()
     val tab by vm.tab.collectAsState()
     val windowMs by vm.windowMs.collectAsState()
     val lanes by vm.lanes.collectAsState()
@@ -95,57 +104,143 @@ fun SessionScreen(
     val showCost by vm.showCost.collectAsState()
     val now by rememberNow()
 
+    // Widths start from the saved layout, change live while dragging, and are saved on release.
+    val saved = remember { vm.layout.value }
+    var railW by remember { mutableFloatStateOf(saved.railWidthDp.toFloat()) }
+    var inspW by remember { mutableFloatStateOf(saved.inspectorWidthDp.toFloat()) }
+    var inspOpen by remember { mutableStateOf(saved.inspectorOpen) }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    fun persist() = vm.saveLayout(railW.roundToInt(), inspW.roundToInt(), inspOpen)
+    fun select(key: String) {
+        vm.select(key)
+        if (!inspOpen) {
+            inspOpen = true
+            persist()
+        }
+    }
+
     Surface(Modifier.fillMaxSize().sessionContainer(vm.sessionId)) {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = navigator::back) { Text("‹ All sessions") }
-                Text("Esc", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val sideRoom = maxWidth.value - SessionLayoutLimits.MAIN_MIN
+            val sizeSpec: (String) -> androidx.compose.animation.core.AnimationSpec<androidx.compose.ui.unit.Dp> = { which ->
+                if (dragging == which) snap() else tween(280, easing = EmphasizedDecelerate)
             }
-            val s = session
-            if (s == null) {
-                Text("This session has ended.", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                return@Column
-            }
-            Header(s, now, showCost)
-            Row(Modifier.padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                PrimaryTabRow(selectedTabIndex = tab.ordinal, modifier = Modifier.width(220.dp), divider = {}) {
-                    SessionTab.entries.forEach { t ->
-                        Tab(selected = tab == t, onClick = { vm.setTab(t) }, text = { Text(t.name) })
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                AnimatedVisibility(tab == SessionTab.Timeline, enter = fadeIn(), exit = fadeOut()) {
-                    Segmented(TimelineWindows, windowMs, vm::setWindow)
-                }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            val railShown by animateDpAsState(railW.dp, sizeSpec("rail"), label = "railWidth")
+            val inspShown by animateDpAsState(if (inspOpen) inspW.dp else 0.dp, sizeSpec("insp"), label = "inspWidth")
+
             Row(Modifier.fillMaxSize()) {
-                AnimatedContent(
-                    targetState = tab,
-                    transitionSpec = {
-                        val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                        (slideInHorizontally(tween(320, easing = EmphasizedDecelerate)) { it / 10 * dir } + fadeIn(tween(320))) togetherWith
-                            (slideOutHorizontally(tween(200)) { -it / 10 * dir } + fadeOut(tween(200)))
+                SessionRail(
+                    sessions = sessions,
+                    currentId = vm.sessionId,
+                    width = railShown,
+                    compact = railW < SessionLayoutLimits.RAIL_COMPACT_BELOW,
+                    onBack = navigator::back,
+                    onOpen = { navigator.openSession(it, timeline = tab == SessionTab.Timeline) },
+                )
+                ResizeDivider(
+                    description = "Resize sessions list",
+                    badge = if (dragging == "rail") "${railW.roundToInt()} dp" else null,
+                    badgeOnLeft = false,
+                    onDragStart = { dragging = "rail" },
+                    onDrag = { d ->
+                        val max = minOf(SessionLayoutLimits.RAIL_MAX, sideRoom - (if (inspOpen) inspW else 0f))
+                        railW = (railW + d).coerceIn(SessionLayoutLimits.RAIL_MIN, max.coerceAtLeast(SessionLayoutLimits.RAIL_MIN))
                     },
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    label = "sessionTab",
-                ) { target ->
-                    when (target) {
-                        SessionTab.Tree -> ChildrenList(s, now, selected, onSelect = vm::select, modifier = Modifier.fillMaxSize())
-                        SessionTab.Timeline -> TimelineView(
-                            lanes = lanes,
-                            windowMs = windowMs,
-                            now = now,
-                            headerLabel = "Thread / child",
-                            selectedKey = selected,
-                            footer = "Solid amber: waiting for you. Dashed: idle or not yet recorded. Ticks: tool calls.",
-                            modifier = Modifier.fillMaxSize(),
-                            onLaneClick = { vm.select(it.key) },
-                        )
+                    onDragEnd = { dragging = null; persist() },
+                    onReset = { railW = SessionLayoutLimits.RAIL_DEFAULT; persist() },
+                )
+
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    val s = session
+                    if (s == null) {
+                        Text("This session has ended.", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        return@Column
+                    }
+                    Header(s, now, showCost)
+                    Row(Modifier.padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PrimaryTabRow(selectedTabIndex = tab.ordinal, modifier = Modifier.width(220.dp), divider = {}) {
+                            SessionTab.entries.forEach { t ->
+                                Tab(selected = tab == t, onClick = { vm.setTab(t) }, text = { Text(t.name) })
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        AnimatedVisibility(tab == SessionTab.Timeline, enter = fadeIn(), exit = fadeOut()) {
+                            Segmented(TimelineWindows, windowMs, vm::setWindow)
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = {
+                            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                            (slideInHorizontally(tween(320, easing = EmphasizedDecelerate)) { it / 10 * dir } + fadeIn(tween(320))) togetherWith
+                                (slideOutHorizontally(tween(200)) { -it / 10 * dir } + fadeOut(tween(200)))
+                        },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        label = "sessionTab",
+                    ) { target ->
+                        when (target) {
+                            SessionTab.Tree -> ChildrenList(s, now, selected, onSelect = ::select, modifier = Modifier.fillMaxSize())
+                            SessionTab.Timeline -> TimelineView(
+                                lanes = lanes,
+                                windowMs = windowMs,
+                                now = now,
+                                headerLabel = "Thread / child",
+                                selectedKey = selected,
+                                footer = "Solid amber: waiting for you. Dashed: idle or not yet recorded. Ticks: tool calls.",
+                                modifier = Modifier.fillMaxSize(),
+                                onLaneClick = { select(it.key) },
+                            )
+                        }
                     }
                 }
-                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Inspector(s, selected, now, vm, Modifier.width(340.dp).fillMaxHeight())
+
+                if (inspOpen) {
+                    ResizeDivider(
+                        description = "Resize details",
+                        badge = if (dragging == "insp") "${inspW.roundToInt()} dp" else null,
+                        badgeOnLeft = true,
+                        onDragStart = { dragging = "insp" },
+                        onDrag = { d ->
+                            val wanted = inspW - d
+                            if (wanted < SessionLayoutLimits.INSPECTOR_COLLAPSE_BELOW) {
+                                inspOpen = false
+                                dragging = null
+                                persist()
+                            } else {
+                                val max = minOf(SessionLayoutLimits.INSPECTOR_MAX, sideRoom - railW)
+                                inspW = wanted.coerceIn(SessionLayoutLimits.INSPECTOR_MIN, max.coerceAtLeast(SessionLayoutLimits.INSPECTOR_MIN))
+                            }
+                        },
+                        onDragEnd = { dragging = null; persist() },
+                        onReset = { inspW = SessionLayoutLimits.INSPECTOR_DEFAULT; persist() },
+                    )
+                }
+                // Laid out at its full width and clipped, so its content doesn't reflow while it animates closed.
+                Box(Modifier.width(inspShown).fillMaxHeight().clipToBounds()) {
+                    val s = session
+                    if (s != null) {
+                        Column(Modifier.requiredWidth(inspW.dp).fillMaxHeight().align(Alignment.TopStart)) {
+                            Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("DETAILS", Modifier.weight(1f), fontSize = 10.5.sp, letterSpacing = 0.8.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                TextButton(onClick = { inspOpen = false; persist() }) { Text("›", fontSize = 16.sp) }
+                            }
+                            Inspector(s, selected, now, vm, Modifier.weight(1f).fillMaxWidth())
+                        }
+                    }
+                }
+            }
+            AnimatedVisibility(
+                visible = !inspOpen,
+                enter = fadeIn(tween(200, delayMillis = 200)),
+                exit = fadeOut(tween(100)),
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                CollapsedDetailsTab(onOpen = {
+                    if (inspW < SessionLayoutLimits.INSPECTOR_MIN) inspW = SessionLayoutLimits.INSPECTOR_DEFAULT
+                    inspOpen = true
+                    persist()
+                })
             }
         }
     }

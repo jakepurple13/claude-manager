@@ -32,6 +32,10 @@ data class AppSettings(
     @ColumnInfo(defaultValue = "2") val refreshSeconds: Int = 2,
     /** Check GitHub Releases for a new version at startup and every 6 hours. */
     @ColumnInfo(defaultValue = "1") val autoCheckUpdates: Boolean = true,
+    /** Session view layout: sessions rail and details panel widths in dp, and whether details is open. */
+    @ColumnInfo(defaultValue = "220") val railWidthDp: Int = 220,
+    @ColumnInfo(defaultValue = "340") val inspectorWidthDp: Int = 340,
+    @ColumnInfo(defaultValue = "1") val inspectorOpen: Boolean = true,
 )
 
 @Dao

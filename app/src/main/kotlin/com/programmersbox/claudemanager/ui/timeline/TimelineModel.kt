@@ -97,7 +97,11 @@ object TimelineBuilder {
             )
         }
         val liveShells = session.shells.map { "shell:${it.pid}" }.toSet()
-        val shells = segments.filter { it.subject.startsWith("shell:") }.groupBy { it.subject }.map { (subject, segs) ->
+        // One-off foreground commands live for seconds; only shells still running or that ran a
+        // while get a lane, so the timeline isn't buried under every Bash call.
+        val shells = segments.filter { it.subject.startsWith("shell:") }.groupBy { it.subject }.filter { (subject, segs) ->
+            subject in liveShells || segs.sumOf { (it.endAt ?: Long.MAX_VALUE) - it.startAt } >= MIN_SHELL_LANE_MS
+        }.map { (subject, segs) ->
             val running = subject in liveShells
             TimelineLane(
                 key = subject,
@@ -142,4 +146,5 @@ object TimelineBuilder {
     )
 
     private const val MAIN = "main"
+    private const val MIN_SHELL_LANE_MS = 30_000L
 }

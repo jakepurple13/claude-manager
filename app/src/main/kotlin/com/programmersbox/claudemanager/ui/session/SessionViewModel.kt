@@ -26,8 +26,21 @@ class SessionViewModel(
     @InjectedParam startOnTimeline: Boolean,
     private val repository: SessionRepository,
     history: HistoryDao,
-    settings: SettingsRepository,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
+    /** Every live session, for the rail. */
+    val sessions: StateFlow<List<SessionSummary>> =
+        repository.sessions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Saved rail/details widths; read once per screen, saved when a drag ends. */
+    val layout: StateFlow<com.programmersbox.claudemanager.data.settings.AppSettings> = settings.settings
+
+    fun saveLayout(railDp: Int, inspectorDp: Int, inspectorOpen: Boolean) {
+        viewModelScope.launch {
+            settings.update { it.copy(railWidthDp = railDp, inspectorWidthDp = inspectorDp, inspectorOpen = inspectorOpen) }
+        }
+    }
+
     val showCost: StateFlow<Boolean> =
         settings.settings.map { it.showCost }.stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value.showCost)
 

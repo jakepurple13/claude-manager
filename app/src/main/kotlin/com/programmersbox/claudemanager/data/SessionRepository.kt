@@ -96,7 +96,9 @@ class SessionRepository(
                 activity = activity,
                 shells = snapshot.shellsByOwner[s.pid].orEmpty().map { p ->
                     val bg = background[p.command.trim()]
-                    ShellInfo(p.pid, p.command, bg?.description, bg != null, p.startedAt, p.cpuPercent, p.memoryBytes)
+                    // A foreground shell is the Bash call in progress: label it with that call's description.
+                    val foreground = activity.current?.takeIf { bg == null && it.name == "Bash" }?.summary?.removePrefix("Bash · ")
+                    ShellInfo(p.pid, p.command, bg?.description ?: foreground, bg != null, p.startedAt, p.cpuPercent, p.memoryBytes)
                 }.sortedBy { it.startedAt },
                 devices = devicesByHolder[s.sessionId].orEmpty(),
             )
