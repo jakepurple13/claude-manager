@@ -108,7 +108,13 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
+      # publish-release runs `gh release create`, which needs a git checkout.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
