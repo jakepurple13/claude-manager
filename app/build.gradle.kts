@@ -103,6 +103,8 @@ nucleus.application {
             upgradeUuid = "6b6a3f0e-6a51-4f8e-9a3d-2c7f1f2e9b41"
         }
         linux {
+            // DEB requires a maintainer with an email; a GitHub no-reply address keeps a personal one out of the package.
+            debMaintainer = "jakepurple13 <2065574+jakepurple13@users.noreply.github.com>"
             iconFile.set(project.file("icons/app.png"))
             menuGroup = "Development"
             shortcut = true
