@@ -90,7 +90,9 @@ Notifications on macOS only appear from a packaged app; use `./gradlew :app:runD
 
 ## Releasing
 
-Push a version tag:
+Every push and pull request runs [`.github/workflows/build.yaml`](.github/workflows/build.yaml): `./gradlew build` (compile and unit tests) on Linux, macOS and Windows.
+
+To publish a release, push a version tag:
 
 ```shell
 git tag v1.2.0 && git push origin v1.2.0
