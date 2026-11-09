@@ -10,6 +10,8 @@ import com.programmersbox.claudemanager.data.cdm.CdmClient
 import com.programmersbox.claudemanager.data.cdm.CdmConnection
 import com.programmersbox.claudemanager.data.settings.AppSettings
 import com.programmersbox.claudemanager.data.settings.SettingsRepository
+import com.programmersbox.claudemanager.data.update.UpdateManager
+import com.programmersbox.claudemanager.data.update.UpdateState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,7 +39,15 @@ class SettingsViewModel(
     private val recorder: HistoryRecorder,
     cdm: CdmClient,
     paths: ClaudePaths,
+    private val updates: UpdateManager,
 ) : ViewModel() {
+    val updateState: StateFlow<UpdateState> = updates.state
+    val currentVersion: String = updates.currentVersion
+
+    fun checkForUpdates() = updates.checkNow()
+    fun downloadUpdate() = updates.download()
+    fun installUpdate() = updates.installAndRestart()
+
     val settings: StateFlow<AppSettings> = repository.settings
 
     private val _category = MutableStateFlow(SettingsCategory.Display)

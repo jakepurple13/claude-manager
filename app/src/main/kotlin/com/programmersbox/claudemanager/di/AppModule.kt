@@ -4,6 +4,7 @@ import com.programmersbox.claudemanager.AppScope
 import com.programmersbox.claudemanager.AppWindow
 import com.programmersbox.claudemanager.data.cdm.CdmClient
 import com.programmersbox.claudemanager.data.notify.SessionNotifier
+import com.programmersbox.claudemanager.data.update.UpdateManager
 import com.programmersbox.claudemanager.ClaudePaths
 import com.programmersbox.claudemanager.data.process.ProcessScanner
 import com.programmersbox.claudemanager.data.transcript.TranscriptStore
@@ -51,6 +52,7 @@ val appModule = module {
     single<SessionRepository>()
     single<HistoryRecorder>()
     single<SessionNotifier>()
+    single<UpdateManager>()
     single<Navigator>()
 
     viewModel<HomeViewModel>()

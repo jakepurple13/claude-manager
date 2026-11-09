@@ -30,6 +30,8 @@ data class AppSettings(
     @ColumnInfo(defaultValue = "system") val themeMode: String = "system",
     /** How often sessions, shells and transcripts are re-read. */
     @ColumnInfo(defaultValue = "2") val refreshSeconds: Int = 2,
+    /** Check GitHub Releases for a new version at startup and every 6 hours. */
+    @ColumnInfo(defaultValue = "1") val autoCheckUpdates: Boolean = true,
 )
 
 @Dao

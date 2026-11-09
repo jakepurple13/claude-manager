@@ -1,0 +1,144 @@
+name: Release
+
+# Push a tag like v1.2.0 (or v1.3.0-beta.1 for the beta channel) to build installers for every
+# platform, generate the Nucleus auto-update metadata (latest*.yml) and publish a GitHub Release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }} / ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 keeps the AppImage/DEB glibc floor low enough for older distros.
+          - { os: ubuntu-22.04, arch: amd64 }
+          - { os: windows-latest, arch: amd64 }
+          - { os: macos-latest, arch: arm64 }
+          - { os: macos-15-intel, arch: amd64 }
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HAS_SIGNING_CERTS: ${{ secrets.MAC_CERTIFICATES_P12 != '' }}
+      HAS_NOTARIZATION: ${{ secrets.MAC_NOTARIZATION_APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Nucleus
+        uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@v2.5.18
+        with:
+          java-version: '21'
+          packaging-tools: 'true'
+
+      # Optional: without these secrets the macOS app is ad-hoc signed, and Gatekeeper asks
+      # users to confirm the first launch.
+      - name: Setup macOS signing
+        id: signing
+        if: runner.os == 'macOS' && env.HAS_SIGNING_CERTS == 'true'
+        uses: NucleusFramework/Nucleus/.github/actions/setup-macos-signing@v2.5.18
+        with:
+          certificate-base64: ${{ secrets.MAC_CERTIFICATES_P12 }}
+          certificate-password: ${{ secrets.MAC_CERTIFICATES_PASSWORD }}
+
+      - name: Configure macOS signing
+        if: runner.os == 'macOS' && env.HAS_SIGNING_CERTS == 'true'
+        shell: bash
+        env:
+          IDENTITY: ${{ secrets.MAC_DEVELOPER_ID_APPLICATION }}
+        run: |
+          {
+            echo "compose.desktop.mac.sign=true"
+            echo "compose.desktop.mac.signing.identity=${IDENTITY#Developer ID Application: }"
+            echo "compose.desktop.mac.signing.keychain=${{ steps.signing.outputs.keychain-path }}"
+          } >> gradle.properties
+
+      - name: Build packages
+        shell: bash
+        run: ./gradlew :app:packageDistributionForCurrentOS --stacktrace --no-daemon
+
+      - name: Notarize DMG and ZIP
+        if: runner.os == 'macOS' && env.HAS_NOTARIZATION == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ARTIFACT in $(find app/build/compose/binaries -type f \( -name '*.dmg' -o -name '*.zip' \)); do
+            xcrun notarytool submit "$ARTIFACT" \
+              --apple-id "${{ secrets.MAC_NOTARIZATION_APPLE_ID }}" \
+              --password "${{ secrets.MAC_NOTARIZATION_PASSWORD }}" \
+              --team-id "${{ secrets.MAC_NOTARIZATION_TEAM_ID }}" \
+              --wait
+            # Staple the DMG only: re-zipping would invalidate the ZIP's update blockmap.
+            if [[ "$ARTIFACT" == *.dmg ]]; then xcrun stapler staple "$ARTIFACT"; fi
+          done
+
+      - name: Cleanup keychain
+        if: always() && runner.os == 'macOS' && env.HAS_SIGNING_CERTS == 'true'
+        shell: bash
+        run: security delete-keychain "${{ steps.signing.outputs.keychain-path }}" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            app/build/compose/binaries/**/*.dmg
+            app/build/compose/binaries/**/*.zip
+            app/build/compose/binaries/**/*.exe
+            app/build/compose/binaries/**/*.deb
+            app/build/compose/binaries/**/*.rpm
+            app/build/compose/binaries/**/*.AppImage
+            app/build/compose/binaries/**/*.blockmap
+            !app/build/compose/binaries/**/app/**
+            !app/build/compose/binaries/**/runtime/**
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: release-assets-*
+
+      - name: Version and channel from the tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          case "$VERSION" in
+            *-alpha*) echo "CHANNEL=alpha" >> "$GITHUB_ENV"; echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV" ;;
+            *-beta*)  echo "CHANNEL=beta" >> "$GITHUB_ENV";  echo "RELEASE_TYPE=prerelease" >> "$GITHUB_ENV" ;;
+            *)        echo "CHANNEL=latest" >> "$GITHUB_ENV"; echo "RELEASE_TYPE=release" >> "$GITHUB_ENV" ;;
+          esac
+
+      # latest-mac.yml / latest.yml / latest-linux.yml: what the in-app updater reads.
+      - name: Generate update metadata
+        uses: NucleusFramework/Nucleus/.github/actions/generate-update-yml@v2.5.18
+        with:
+          artifacts-path: artifacts
+          version: ${{ env.VERSION }}
+          channel: ${{ env.CHANNEL }}
+
+      - name: Publish GitHub Release
+        uses: NucleusFramework/Nucleus/.github/actions/publish-release@v2.5.18
+        with:
+          artifacts-path: artifacts
+          tag: ${{ env.TAG }}
+          release-type: ${{ env.RELEASE_TYPE }}

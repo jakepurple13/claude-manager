@@ -20,8 +20,9 @@ nucleus-window-material3 = { module = "dev.nucleusframework:nucleus.decorated-wi
 nucleus-darkmode = { module = "dev.nucleusframework:nucleus.darkmode-detector", version.ref = "nucleus" }
 nucleus-notifications = { module = "dev.nucleusframework:nucleus.notification-common", version.ref = "nucleus" }
 nucleus-fs-watcher = { module = "dev.nucleusframework:nucleus.fs-watcher", version.ref = "nucleus" }
+nucleus-updater = { module = "dev.nucleusframework:nucleus.updater-runtime", version.ref = "nucleus" }
 nucleus-system-info = { module = "dev.nucleusframework:nucleus.system-info", version.ref = "nucleus" }
-composenativetray-app = { module = "dev.nucleusframework:composenativetray-app", version.ref = "composenativetray" }
+composenativetray = { module = "dev.nucleusframework:composenativetray", version.ref = "composenativetray" }
 
 navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }

@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.rememberWindowState
 import com.programmersbox.claudemanager.data.HistoryRecorder
 import com.programmersbox.claudemanager.data.notify.SessionNotifier
+import com.programmersbox.claudemanager.data.update.UpdateManager
 import com.programmersbox.claudemanager.data.settings.SettingsRepository
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +33,7 @@ fun main(args: Array<String>) {
     // Record history for the app's whole life, including while the window is closed.
     koin.get<HistoryRecorder>().start()
     koin.get<SessionNotifier>().start()
+    koin.get<UpdateManager>().start()
     val appWindow = koin.get<AppWindow>()
     val settings = koin.get<SettingsRepository>()
 

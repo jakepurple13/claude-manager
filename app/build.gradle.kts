@@ -1,3 +1,5 @@
+import dev.nucleusframework.desktop.application.dsl.ReleaseChannel
+import dev.nucleusframework.desktop.application.dsl.ReleaseType
 import dev.nucleusframework.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -26,7 +28,8 @@ dependencies {
     implementation(libs.nucleus.notifications)
     implementation(libs.nucleus.fs.watcher)
     implementation(libs.nucleus.system.info)
-    implementation(libs.composenativetray.app)
+    implementation(libs.nucleus.updater)
+    implementation(libs.composenativetray)
 
     implementation(libs.navigation3.ui)
     implementation(libs.lifecycle.viewmodel.compose)
@@ -53,12 +56,65 @@ room3 {
     schemaDirectory("$projectDir/schemas")
 }
 
+/**
+ * App version: `-PappVersion=1.2.3`, else the release tag in CI (`v1.2.3` -> `1.2.3`), else 1.0.0.
+ * The updater compares this against the version in the GitHub release's latest-*.yml.
+ */
+val appVersion: String = (findProperty("appVersion") as String?)
+    ?: System.getenv("GITHUB_REF_NAME")?.takeIf { it.startsWith("v") }?.removePrefix("v")
+    ?: "1.0.0"
+
 nucleus.application {
     mainClass = "com.programmersbox.claudemanager.MainKt"
 
     nativeDistributions {
         packageName = "Claude Manager"
-        packageVersion = "1.0.0"
-        targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+        packageVersion = appVersion
+        description = "Monitor Claude Code sessions, subagents, shells and devices"
+        vendor = "programmersbox"
+        homepage = "https://github.com/jakepurple13/claude-manager"
+        // Formats the Nucleus updater can update in place. The macOS ZIP is what the updater
+        // installs; the DMG is for first installs.
+        targetFormats(
+            TargetFormat.Dmg,
+            TargetFormat.Zip,
+            TargetFormat.Nsis,
+            TargetFormat.Deb,
+            TargetFormat.Rpm,
+            TargetFormat.AppImage,
+        )
+        modules("java.sql", "java.net.http", "jdk.unsupported", "jdk.crypto.ec")
+        cleanupNativeLibs = true
+
+        macOS {
+            bundleID = "com.programmersbox.claudemanager"
+            dockName = "Claude Manager"
+            appCategory = "public.app-category.developer-tools"
+            minimumSystemVersion = "12.0"
+            iconFile.set(project.file("icons/app.icns"))
+        }
+        windows {
+            iconFile.set(project.file("icons/app.ico"))
+            menuGroup = "Claude Manager"
+            shortcut = true
+            // Fixed so new versions upgrade the installed app instead of installing beside it.
+            upgradeUuid = "6b6a3f0e-6a51-4f8e-9a3d-2c7f1f2e9b41"
+        }
+        linux {
+            iconFile.set(project.file("icons/app.png"))
+            menuGroup = "Development"
+            shortcut = true
+        }
+
+        publish {
+            github {
+                enabled = true
+                owner = "jakepurple13"
+                repo = "claude-manager"
+                token = System.getenv("GITHUB_TOKEN")
+                channel = ReleaseChannel.Latest
+                releaseType = ReleaseType.Release
+            }
+        }
     }
 }

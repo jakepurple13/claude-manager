@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
@@ -66,6 +68,7 @@ import com.programmersbox.claudemanager.data.registry.SessionStatus
 import com.programmersbox.claudemanager.data.settings.AppSettings
 import com.programmersbox.claudemanager.data.transcript.SessionActivity
 import com.programmersbox.claudemanager.data.transcript.ToolCall
+import com.programmersbox.claudemanager.data.update.UpdateState
 import com.programmersbox.claudemanager.ui.components.ConfirmDialog
 import com.programmersbox.claudemanager.ui.components.rememberNow
 import com.programmersbox.claudemanager.ui.home.SessionCard
@@ -76,7 +79,6 @@ import com.programmersbox.claudemanager.ui.timeline.Segmented
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
-const val APP_VERSION = "1.0.0"
 
 @Composable
 fun SettingsScreen(
@@ -87,7 +89,7 @@ fun SettingsScreen(
 
     Surface(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            Sidebar(category, onSelect = vm::select, onBack = navigator::back)
+            Sidebar(category, vm, onSelect = vm::select, onBack = navigator::back)
             VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             AnimatedContent(
                 targetState = category,
@@ -102,7 +104,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun Sidebar(selected: SettingsCategory, onSelect: (SettingsCategory) -> Unit, onBack: () -> Unit) {
+private fun Sidebar(selected: SettingsCategory, vm: SettingsViewModel, onSelect: (SettingsCategory) -> Unit, onBack: () -> Unit) {
     Column(
         Modifier.width(232.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainer).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -127,7 +129,7 @@ private fun Sidebar(selected: SettingsCategory, onSelect: (SettingsCategory) -> 
             )
         }
         Spacer(Modifier.weight(1f))
-        Text("Claude Manager $APP_VERSION", Modifier.padding(horizontal = 14.dp), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Claude Manager ${vm.currentVersion}", Modifier.padding(horizontal = 14.dp), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -333,14 +335,58 @@ private fun CdmStatus(cdm: CdmConnection) = when {
 @Composable
 private fun AboutSettings(vm: SettingsViewModel) {
     val clipboard = LocalClipboardManager.current
-    val details = "Claude Manager $APP_VERSION · Compose Multiplatform · Nucleus · Navigation 3 · Koin · Room3 · " +
+    val s by vm.settings.collectAsState()
+    UpdatesGroup(s, vm)
+    val details = "Claude Manager ${vm.currentVersion} · Compose Multiplatform · Nucleus · Navigation 3 · Koin · Room3 · " +
         "${System.getProperty("os.name")} ${System.getProperty("os.version")} · Java ${System.getProperty("java.version")}"
     Group("About") {
-        SettingRow("Claude Manager $APP_VERSION", "Compose Multiplatform · Nucleus · Navigation 3 · Koin · Room3", first = true) {
+        SettingRow("Claude Manager ${vm.currentVersion}", "Compose Multiplatform · Nucleus · Navigation 3 · Koin · Room3", first = true) {
             TextButton(onClick = { clipboard.setText(AnnotatedString(details)) }) { Text("Copy details") }
         }
         SettingRow("Prices", "Claude API list prices as of ${Pricing.AS_OF}.") {}
         SettingRow("Database", "Session names, pins, history and settings.") { PathChip(vm.appDataDir) }
+    }
+}
+
+@Composable
+private fun UpdatesGroup(s: AppSettings, vm: SettingsViewModel) {
+    val state by vm.updateState.collectAsState()
+    Group("Updates") {
+        SettingRow("Check for updates automatically", "At startup and every 6 hours, from GitHub Releases.", first = true) {
+            Switch(s.autoCheckUpdates, { on -> vm.update { it.copy(autoCheckUpdates = on) } })
+        }
+        when (val st = state) {
+            UpdateState.Unsupported -> SettingRow(
+                "Updates aren't available in this build",
+                "Running from Gradle or an IDE. Installed copies (DMG, NSIS, DEB, RPM, AppImage) update themselves.",
+            ) {}
+            UpdateState.Idle, is UpdateState.Failed, is UpdateState.UpToDate -> SettingRow(
+                when (st) {
+                    is UpdateState.UpToDate -> "You're up to date"
+                    is UpdateState.Failed -> "Couldn't check for updates"
+                    else -> "Version ${vm.currentVersion}"
+                },
+                (st as? UpdateState.Failed)?.message,
+            ) { OutlinedButton(onClick = vm::checkForUpdates) { Text("Check now") } }
+            UpdateState.Checking -> SettingRow("Checking for updates…") {
+                LinearProgressIndicator(Modifier.width(140.dp))
+            }
+            is UpdateState.Available -> SettingRow("Version ${st.version} is available", "You have ${vm.currentVersion}.") {
+                Button(onClick = vm::downloadUpdate) { Text("Download") }
+            }
+            is UpdateState.Downloading -> SettingRow(
+                "Downloading ${st.version}",
+                if (st.differential) "Only the changed parts are downloaded." else null,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LinearProgressIndicator(progress = { (st.percent / 100).toFloat() }, modifier = Modifier.width(140.dp))
+                    Text("${st.percent.toInt()}%", fontSize = 13.sp)
+                }
+            }
+            is UpdateState.ReadyToInstall -> SettingRow("Version ${st.version} is ready", "Claude Manager quits, installs it and reopens.") {
+                Button(onClick = vm::installUpdate) { Text("Install and restart") }
+            }
+        }
     }
 }
 
