@@ -26,7 +26,6 @@ jobs:
           - { os: ubuntu-22.04, arch: amd64 }
           - { os: windows-latest, arch: amd64 }
           - { os: macos-latest, arch: arm64 }
-          - { os: macos-15-intel, arch: amd64 }
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       HAS_SIGNING_CERTS: ${{ secrets.MAC_CERTIFICATES_P12 != '' }}
