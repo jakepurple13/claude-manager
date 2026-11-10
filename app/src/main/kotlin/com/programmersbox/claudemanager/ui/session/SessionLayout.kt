@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.programmersbox.claudemanager.data.SessionSummary
 import com.programmersbox.claudemanager.data.runningChildren
+import com.programmersbox.claudemanager.data.runningChildrenLabel
 import com.programmersbox.claudemanager.ui.components.StatusDot
 import com.programmersbox.claudemanager.ui.components.label
 
@@ -128,7 +129,7 @@ fun SessionRail(
                             horizontalArrangement = if (compact) Arrangement.Center else Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            StatusDot(s.live.status)
+                            StatusDot(s.live.status, background = s.runningChildren())
                             if (!compact) {
                                 Column(Modifier.weight(1f)) {
                                     Text(
@@ -139,9 +140,8 @@ fun SessionRail(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    val running = s.runningChildren()
                                     Text(
-                                        s.live.status.label() + if (running > 0) " · $running running" else "",
+                                        s.live.status.label() + (s.runningChildrenLabel()?.let { " · $it" } ?: ""),
                                         fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,

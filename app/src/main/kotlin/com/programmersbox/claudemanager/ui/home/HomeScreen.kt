@@ -61,6 +61,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.programmersbox.claudemanager.data.SessionSummary
+import com.programmersbox.claudemanager.data.runningChildren
+import com.programmersbox.claudemanager.data.runningChildrenLabel
 import com.programmersbox.claudemanager.data.runningTasks
 import com.programmersbox.claudemanager.data.visibleShells
 import com.programmersbox.claudemanager.data.transcript.TaskKind
@@ -294,7 +296,7 @@ internal fun SessionCard(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                StatusPill(live.status)
+                StatusPill(live.status, background = session.runningChildren(now), backgroundLabel = session.runningChildrenLabel(now))
             }
             Text(
                 nowLine,

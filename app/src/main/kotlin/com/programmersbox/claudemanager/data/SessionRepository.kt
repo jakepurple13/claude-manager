@@ -56,6 +56,17 @@ fun SessionSummary.runningTasks(now: Long = System.currentTimeMillis()) = activi
 fun SessionSummary.runningChildren(now: Long = System.currentTimeMillis()): Int =
     activity.subagents.count { it.running } + visibleShells.size + runningTasks(now).size
 
+/** "2 agents" when only subagents are running, "3 running" when shells or tasks are too; null when nothing is. */
+fun SessionSummary.runningChildrenLabel(now: Long = System.currentTimeMillis()): String? {
+    val total = runningChildren(now)
+    val agents = activity.subagents.count { it.running }
+    return when {
+        total == 0 -> null
+        agents == total -> if (total == 1) "1 agent" else "$total agents"
+        else -> "$total running"
+    }
+}
+
 data class SessionsState(
     val sessions: List<SessionSummary> = emptyList(),
     val orphanShells: List<ShellProcess> = emptyList(),
