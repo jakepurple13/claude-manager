@@ -34,7 +34,7 @@ Download the latest installer from [Releases](https://github.com/jakepurple13/cl
 
 | OS | Download |
 |---|---|
-| macOS (Apple Silicon or Intel) | `.dmg` |
+| macOS (Apple Silicon) | `.dmg` |
 | Windows | `.exe` (NSIS installer) |
 | Linux | `.deb`, `.rpm` or `.AppImage` |
 
@@ -98,7 +98,7 @@ To publish a release, push a version tag:
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-[`.github/workflows/release.yaml`](.github/workflows/release.yaml) builds on Linux x64, Windows x64, macOS Apple Silicon and macOS Intel, generates the auto-update metadata (`latest-mac.yml`, `latest.yml`, `latest-linux.yml`) and publishes the GitHub Release. Tags like `v1.3.0-beta.1` publish a pre-release on the `beta` channel.
+[`.github/workflows/release.yaml`](.github/workflows/release.yaml) builds on Linux x64, Windows x64 and macOS Apple Silicon, generates the auto-update metadata (`latest-mac.yml`, `latest.yml`, `latest-linux.yml`) and publishes the GitHub Release. Tags like `v1.3.0-beta.1` publish a pre-release on the `beta` channel.
 
 macOS signing and notarization run when these repository secrets are set: `MAC_CERTIFICATES_P12`, `MAC_CERTIFICATES_PASSWORD`, `MAC_DEVELOPER_ID_APPLICATION`, `MAC_NOTARIZATION_APPLE_ID`, `MAC_NOTARIZATION_PASSWORD`, `MAC_NOTARIZATION_TEAM_ID`.
 
