@@ -75,7 +75,9 @@ import com.programmersbox.claudemanager.data.settings.AppSettings
 import com.programmersbox.claudemanager.data.transcript.SessionActivity
 import com.programmersbox.claudemanager.data.transcript.ToolCall
 import com.programmersbox.claudemanager.data.update.UpdateState
+import com.programmersbox.claudemanager.ui.components.BackgroundIndicator
 import com.programmersbox.claudemanager.ui.components.ConfirmDialog
+import com.programmersbox.claudemanager.ui.components.StatusPill
 import com.programmersbox.claudemanager.ui.components.rememberNow
 import com.programmersbox.claudemanager.ui.home.SessionCard
 import com.programmersbox.claudemanager.ui.motion.EmphasizedDecelerate
@@ -265,6 +267,35 @@ private fun DisplaySettings(s: AppSettings, vm: SettingsViewModel) {
             onSelect = { picked -> vm.update { it.copy(themePalette = picked.id) } },
             modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 14.dp),
         )
+    }
+    Group("Status dot") {
+        SettingRow(
+            "Background work",
+            "How the dot shows agents, workflows and shells still running after Claude's turn ends.",
+            first = true,
+        ) {
+            Segmented(
+                BackgroundIndicator.entries.map { it.id to it.label },
+                BackgroundIndicator.fromId(s.backgroundIndicator).id,
+                { id -> vm.update { it.copy(backgroundIndicator = id) } },
+            )
+        }
+        SettingRow("Size", "Diameter of the dot on the board, the sessions list and timelines.") {
+            Segmented(
+                listOf(8, 10, 12).map { it to "$it dp" },
+                s.statusDotSizeDp,
+                { size -> vm.update { it.copy(statusDotSizeDp = size) } },
+            )
+        }
+        Row(
+            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusPill(SessionStatus.Idle, background = 2, backgroundLabel = "2 agents")
+            StatusPill(SessionStatus.Waiting, background = 1, backgroundLabel = "1 agent")
+            StatusPill(SessionStatus.Working)
+        }
     }
     Group("Costs") {
         SettingRow(

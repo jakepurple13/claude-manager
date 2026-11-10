@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.programmersbox.claudemanager.data.SessionSummary
 import com.programmersbox.claudemanager.data.ShellInfo
+import com.programmersbox.claudemanager.data.runningChildren
+import com.programmersbox.claudemanager.data.runningChildrenLabel
 import com.programmersbox.claudemanager.data.visibleShells
 import com.programmersbox.claudemanager.data.transcript.BackgroundTask
 import com.programmersbox.claudemanager.data.transcript.TaskKind
@@ -256,7 +258,7 @@ private fun Header(s: SessionSummary, now: Long, showCost: Boolean) {
     Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(s.displayName, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            StatusPill(live.status)
+            StatusPill(live.status, background = s.runningChildren(now), backgroundLabel = s.runningChildrenLabel(now))
             SourceChip(live.source)
             a.model?.let { Chip(it) }
             a.gitBranch?.let { Chip("⎇ $it") }

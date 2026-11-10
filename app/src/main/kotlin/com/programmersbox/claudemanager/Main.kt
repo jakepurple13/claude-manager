@@ -27,6 +27,9 @@ import com.programmersbox.claudemanager.ui.theme.ThemeRipple
 import com.programmersbox.claudemanager.ui.theme.ThemeRippleHost
 import androidx.compose.runtime.CompositionLocalProvider
 import com.programmersbox.claudemanager.ui.tray.ClaudeManagerTray
+import com.programmersbox.claudemanager.ui.components.BackgroundIndicator
+import com.programmersbox.claudemanager.ui.components.LocalStatusDotStyle
+import com.programmersbox.claudemanager.ui.components.StatusDotStyle
 import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.window.material.MaterialDecoratedWindow
 import dev.nucleusframework.window.material.MaterialTitleBar
@@ -50,7 +53,10 @@ fun main(args: Array<String>) {
         val prefs by settings.settings.collectAsState()
         val themeRipple = remember { ThemeRipple() }
         ClaudeManagerTheme(prefs.themeMode, prefs.themePalette) {
-          CompositionLocalProvider(LocalThemeRipple provides themeRipple) {
+          CompositionLocalProvider(
+              LocalThemeRipple provides themeRipple,
+              LocalStatusDotStyle provides StatusDotStyle(BackgroundIndicator.fromId(prefs.backgroundIndicator), prefs.statusDotSizeDp.dp),
+          ) {
             if (appWindow.visible) {
                 MaterialDecoratedWindow(
                     onCloseRequest = appWindow::hide,

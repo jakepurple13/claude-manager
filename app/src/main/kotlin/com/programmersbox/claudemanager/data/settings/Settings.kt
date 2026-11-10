@@ -38,6 +38,10 @@ data class AppSettings(
     @ColumnInfo(defaultValue = "220") val railWidthDp: Int = 220,
     @ColumnInfo(defaultValue = "340") val inspectorWidthDp: Int = 340,
     @ColumnInfo(defaultValue = "1") val inspectorOpen: Boolean = true,
+    /** How a status dot shows background work: "orbit" (spinning ring) or "satellites" (one orbiting dot per child). */
+    @ColumnInfo(defaultValue = "orbit") val backgroundIndicator: String = "orbit",
+    /** Status dot diameter in dp. */
+    @ColumnInfo(defaultValue = "8") val statusDotSizeDp: Int = 8,
 )
 
 @Dao
