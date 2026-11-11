@@ -57,14 +57,14 @@ room3 {
 }
 
 /**
- * App version: `-PappVersion=1.2.3`, else the release tag in CI (`v1.2.3` -> `1.2.3`), else 1.2.0.
+ * App version: `-PappVersion=1.2.3`, else the release tag in CI (`v1.2.3` -> `1.2.3`), else 1.2.1.
  * The updater compares this against the version in the GitHub release's latest-*.yml.
  */
 // Read through providers so the configuration cache notices a changed -PappVersion or tag;
 // findProperty / System.getenv would reuse the version from the cached configuration.
 val appVersion: String = providers.gradleProperty("appVersion").orNull
     ?: providers.environmentVariable("GITHUB_REF_NAME").orNull?.takeIf { it.startsWith("v") }?.removePrefix("v")
-    ?: "1.2.0"
+    ?: "1.2.1"
 
 nucleus.application {
     mainClass = "com.programmersbox.claudemanager.MainKt"

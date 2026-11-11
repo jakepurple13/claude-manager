@@ -44,8 +44,8 @@ fun main(args: Array<String>) {
     val appWindow = koin.get<AppWindow>()
     val settings = koin.get<SettingsRepository>()
 
-    // dockIconFollowsWindows: on macOS the Dock icon shows only while the main window is open,
-    // so closing the window leaves the app running in the menu bar.
+    // dockIconFollowsWindows: on macOS the Dock icon shows only while the main window is open.
+    // Closing the window quits the app; the tray's Quit item does the same.
     nucleusApplication(args, dockIconFollowsWindows = true) {
         val windowState = rememberWindowState(size = DpSize(1180.dp, 760.dp))
         val navigator = remember { koin.get<Navigator>() }
@@ -59,7 +59,7 @@ fun main(args: Array<String>) {
           ) {
             if (appWindow.visible) {
                 MaterialDecoratedWindow(
-                    onCloseRequest = appWindow::hide,
+                    onCloseRequest = ::exitApplication,
                     state = windowState,
                     title = "Claude Manager",
                     minimumSize = DpSize(900.dp, 560.dp),
