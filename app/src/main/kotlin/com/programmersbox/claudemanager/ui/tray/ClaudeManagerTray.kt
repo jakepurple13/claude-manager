@@ -15,7 +15,7 @@ import com.programmersbox.claudemanager.data.settings.SettingsRepository
 import com.programmersbox.claudemanager.ui.components.formatCost
 import com.programmersbox.claudemanager.ui.components.label
 import com.programmersbox.claudemanager.ui.navigation.Navigator
-import dev.nucleusframework.composenativetray.tray.api.Tray
+
 import org.koin.compose.koinInject
 
 /**
@@ -52,7 +52,7 @@ fun ClaudeManagerTray(
 
     val icon = remember { trayIconFiles(paths.appDataDir.resolve("tray")) }
 
-    Tray(
+    OffMainTray(
         iconPath = icon.png.toString(),
         windowsIconPath = icon.ico.toString(),
         tooltip = buildString {
