@@ -36,6 +36,7 @@ import dev.nucleusframework.window.material.MaterialTitleBar
 import org.koin.core.context.startKoin
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import com.programmersbox.claudemanager.ui.home.MainTitleBarControls
 import com.programmersbox.claudemanager.ui.window.SessionWindowHost
 import com.programmersbox.claudemanager.ui.window.SessionWindows
 import dev.nucleusframework.application.NucleusWindow
@@ -88,7 +89,10 @@ fun main(args: Array<String>) {
                             nucleusWindow.requestFocus()
                         }
                     }
-                    MaterialTitleBar { Text("Claude Manager") }
+                    MaterialTitleBar {
+                        Text("Claude Manager")
+                        MainTitleBarControls()
+                    }
                     ThemeRippleHost(themeRipple, Modifier.fillMaxSize()) {
                         Surface(Modifier.fillMaxSize()) { AppNavigation() }
                     }
