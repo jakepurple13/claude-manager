@@ -30,6 +30,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
+import com.programmersbox.claudemanager.data.transcript.ExecutionMode
+import com.programmersbox.claudemanager.ui.components.ContextMeter
+import com.programmersbox.claudemanager.ui.components.ModeChip
+import com.programmersbox.claudemanager.ui.components.PermissionChip
+import com.programmersbox.claudemanager.ui.components.PrChip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -169,6 +175,7 @@ private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, totalC
         Stat(sessions.size, "sessions")
         Stat(sessions.count { it.live.status == SessionStatus.Working }, "working")
         Stat(sessions.sumOf { s -> s.activity.subagents.count { it.running } }, "agents running")
+        sessions.count { it.activity.execution.mode == ExecutionMode.SubagentDriven }.takeIf { it > 0 }?.let { Stat(it, "subagent-driven") }
         Stat(sessions.sumOf { it.visibleShells.size }, "shells")
         sessions.sumOf { it.runningTasks().size }.takeIf { it > 0 }?.let { Stat(it, "monitors & workflows") }
         devicesHeld?.let { Stat(it, "devices held") }
@@ -321,21 +328,33 @@ internal fun SessionCard(
                 } }
                 if (kids.size > 4) Text("+${kids.size - 4} more", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (activity.contextTokens > 0) ContextMeter(activity.contextTokens, activity.contextWindow, Modifier.fillMaxWidth())
+            // Chips keep their width and wrap to a new line; the summary text moves down whole.
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                ModeChip(activity.execution.mode)
+                PermissionChip(activity.permissionMode)
+                activity.pullRequest?.let { PrChip(it) }
                 SourceChip(live.source)
-                Text(
-                    listOfNotNull(activity.model, formatElapsed(live.startedAt, now)).joinToString(" · "),
-                    Modifier.weight(1f),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                RollingText(
-                    "${formatTokens(activity.contextTokens)} ctx · ${formatTokens(activity.outputTokens)} out" +
-                        if (showCost) " · ${formatCost(activity.cost)}" else "",
-                    style = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
-                )
+                Spacer(Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        listOfNotNull(activity.model?.removePrefix("claude-"), formatElapsed(live.startedAt, now)).joinToString(" · ", postfix = " · "),
+                        Modifier.weight(1f, fill = false),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    RollingText(
+                        "${formatTokens(activity.outputTokens)} out" + if (showCost) " · ${formatCost(activity.cost)}" else "",
+                        style = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    )
+                }
             }
         }
     }

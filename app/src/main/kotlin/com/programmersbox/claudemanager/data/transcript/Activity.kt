@@ -90,4 +90,69 @@ data class SessionActivity(
     /** API-equivalent cost of the main thread plus all subagents. */
     val cost: CostEstimate = CostEstimate.Zero,
     val tasks: List<BackgroundTask> = emptyList(),
-)
+    /** Latest permission mode: "default", "auto", "plan", "acceptEdits", "bypassPermissions". */
+    val permissionMode: String? = null,
+    /** Reasoning effort of the latest request. */
+    val effort: String? = null,
+    val worktree: WorktreeInfo? = null,
+    val pullRequest: PullRequestLink? = null,
+    val lastPrompt: String? = null,
+    /** Prompts the user has sent so far. */
+    val prompts: Int = 0,
+    /** Distinct files written by the session or its agents. */
+    val filesEdited: Int = 0,
+    /** Skills the main thread loaded, in first-use order. */
+    val skills: List<String> = emptyList(),
+    val compactions: Int = 0,
+    val hookErrors: Int = 0,
+) {
+    /** Context window the latest request ran against: 1M once the prompt outgrows 200k or the model asks for it. */
+    val contextWindow: Long
+        get() = if (contextTokens > DEFAULT_CONTEXT_WINDOW || model?.contains("[1m]") == true) 1_000_000 else DEFAULT_CONTEXT_WINDOW
+
+    val execution: Execution get() = Execution.of(this)
+
+    companion object {
+        const val DEFAULT_CONTEXT_WINDOW = 200_000L
+    }
+}
+
+data class WorktreeInfo(val name: String?, val branch: String?, val originalCwd: String?)
+
+data class PullRequestLink(val number: Long, val url: String?, val repository: String?)
+
+enum class ExecutionMode(val label: String) { Native("Native"), SubagentDriven("Subagent-driven") }
+
+/** Whether the main thread does the work itself or mostly hands it to agents, and why. */
+data class Execution(
+    val mode: ExecutionMode,
+    val reason: String,
+    val mainCalls: Int,
+    val agentCalls: Int,
+) {
+    companion object {
+        /** Skills whose whole purpose is dispatching agents. */
+        private val DISPATCH_SKILLS = listOf("subagent-driven-development", "dispatching-parallel-agents")
+        /** Agent types used for quick lookups; a few of these don't make a session agent-driven. */
+        private val LOOKUP_AGENTS = setOf("explore", "claude-code-guide", "plan")
+
+        fun of(activity: SessionActivity): Execution {
+            val mainCalls = activity.toolCount
+            val agentCalls = activity.subagents.sumOf { it.toolCount }
+            val skill = activity.skills.firstOrNull { s -> DISPATCH_SKILLS.any { s.endsWith(it) } }
+            val workers = activity.subagents.filter { it.type.substringAfterLast(':').lowercase() !in LOOKUP_AGENTS }
+            val share = if (mainCalls + agentCalls == 0) 0 else agentCalls * 100 / (mainCalls + agentCalls)
+            return when {
+                skill != null -> Execution(ExecutionMode.SubagentDriven, "Loaded $skill.", mainCalls, agentCalls)
+                workers.size >= 2 && share >= 50 ->
+                    Execution(ExecutionMode.SubagentDriven, "$share% of tool calls ran inside ${workers.size} agents.", mainCalls, agentCalls)
+                else -> Execution(
+                    ExecutionMode.Native,
+                    if (agentCalls == 0) "The main thread made every tool call." else "$share% of tool calls ran inside agents.",
+                    mainCalls,
+                    agentCalls,
+                )
+            }
+        }
+    }
+}

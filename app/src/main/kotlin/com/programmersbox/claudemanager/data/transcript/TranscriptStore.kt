@@ -31,7 +31,9 @@ class TranscriptStore(private val paths: ClaudePaths) {
     fun activity(sessionId: String): SessionActivity {
         val transcript = locate(sessionId) ?: return SessionActivity()
         val main = read(transcript)
-        val agents = subagents(transcript.parent.resolve(sessionId).resolve("subagents"))
+        val agentDir = transcript.parent.resolve(sessionId).resolve("subagents")
+        val agents = subagents(agentDir)
+        val agentFiles = agentDir.takeIf { it.isDirectory() }?.listDirectoryEntries("agent-*.jsonl")?.map { read(it).filesEdited }.orEmpty()
         return SessionActivity(
             title = main.title,
             model = main.model,
@@ -48,6 +50,16 @@ class TranscriptStore(private val paths: ClaudePaths) {
             toolTimes = main.toolTimes,
             cost = agents.fold(main.cost) { acc, a -> acc + a.cost },
             tasks = main.tasks,
+            permissionMode = main.permissionMode,
+            effort = main.effort,
+            worktree = main.worktree,
+            pullRequest = main.pullRequest,
+            lastPrompt = main.lastPrompt,
+            prompts = main.prompts,
+            filesEdited = agentFiles.fold(main.filesEdited) { acc, files -> acc + files }.size,
+            skills = main.skills,
+            compactions = main.compactions,
+            hookErrors = main.hookErrors,
         )
     }
 
