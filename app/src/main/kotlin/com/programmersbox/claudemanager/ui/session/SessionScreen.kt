@@ -142,27 +142,29 @@ fun SessionScreen(
             val inspShown by animateDpAsState(if (inspOpen) inspW.dp else 0.dp, sizeSpec("insp"), label = "inspWidth")
 
             Row(Modifier.fillMaxSize()) {
-                SessionRail(
-                    sessions = sessions,
-                    currentId = vm.sessionId,
-                    width = railShown,
-                    compact = railW < SessionLayoutLimits.RAIL_COMPACT_BELOW,
-                    onBack = windowControls?.onShowBoard ?: navigator::back,
-                    onOpen = windowControls?.onOpenSession ?: { navigator.openSession(it, timeline = tab == SessionTab.Timeline) },
-                    backLabel = if (windowControls != null) "Show board" else "‹ All sessions",
-                )
-                ResizeDivider(
-                    description = "Resize sessions list",
-                    badge = if (dragging == "rail") "${railW.roundToInt()} dp" else null,
-                    badgeOnLeft = false,
-                    onDragStart = { dragging = "rail" },
-                    onDrag = { d ->
-                        val max = minOf(SessionLayoutLimits.RAIL_MAX, sideRoom - (if (inspOpen) inspW else 0f))
-                        railW = (railW + d).coerceIn(SessionLayoutLimits.RAIL_MIN, max.coerceAtLeast(SessionLayoutLimits.RAIL_MIN))
-                    },
-                    onDragEnd = { dragging = null; persist() },
-                    onReset = { railW = SessionLayoutLimits.RAIL_DEFAULT; persist() },
-                )
+                // A session window shows one session, so it has no sessions list to switch with.
+                if (windowControls == null) {
+                    SessionRail(
+                        sessions = sessions,
+                        currentId = vm.sessionId,
+                        width = railShown,
+                        compact = railW < SessionLayoutLimits.RAIL_COMPACT_BELOW,
+                        onBack = navigator::back,
+                        onOpen = { navigator.openSession(it, timeline = tab == SessionTab.Timeline) },
+                    )
+                    ResizeDivider(
+                        description = "Resize sessions list",
+                        badge = if (dragging == "rail") "${railW.roundToInt()} dp" else null,
+                        badgeOnLeft = false,
+                        onDragStart = { dragging = "rail" },
+                        onDrag = { d ->
+                            val max = minOf(SessionLayoutLimits.RAIL_MAX, sideRoom - (if (inspOpen) inspW else 0f))
+                            railW = (railW + d).coerceIn(SessionLayoutLimits.RAIL_MIN, max.coerceAtLeast(SessionLayoutLimits.RAIL_MIN))
+                        },
+                        onDragEnd = { dragging = null; persist() },
+                        onReset = { railW = SessionLayoutLimits.RAIL_DEFAULT; persist() },
+                    )
+                }
 
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     val s = session
@@ -185,6 +187,7 @@ fun SessionScreen(
                         AnimatedVisibility(tab == SessionTab.Timeline, enter = fadeIn(), exit = fadeOut()) {
                             Segmented(TimelineWindows, windowMs, vm::setWindow)
                         }
+                        windowControls?.let { TextButton(onClick = it.onShowBoard) { Text("Show board") } }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AnimatedContent(
@@ -226,7 +229,7 @@ fun SessionScreen(
                                 dragging = null
                                 persist()
                             } else {
-                                val max = minOf(SessionLayoutLimits.INSPECTOR_MAX, sideRoom - railW)
+                                val max = minOf(SessionLayoutLimits.INSPECTOR_MAX, sideRoom - (if (windowControls == null) railW else 0f))
                                 inspW = wanted.coerceIn(SessionLayoutLimits.INSPECTOR_MIN, max.coerceAtLeast(SessionLayoutLimits.INSPECTOR_MIN))
                             }
                         },
@@ -268,8 +271,6 @@ fun SessionScreen(
 class SessionWindowControls(
     val onShowBoard: () -> Unit,
     val onClose: () -> Unit,
-    /** A rail click switches this window to that session. */
-    val onOpenSession: (String) -> Unit,
 )
 
 @Composable
