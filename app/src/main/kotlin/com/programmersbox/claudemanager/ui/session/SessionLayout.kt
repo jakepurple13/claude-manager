@@ -65,6 +65,8 @@ import com.programmersbox.claudemanager.data.runningChildren
 import com.programmersbox.claudemanager.data.runningChildrenLabel
 import com.programmersbox.claudemanager.ui.components.StatusDot
 import com.programmersbox.claudemanager.ui.components.label
+import com.programmersbox.claudemanager.ui.motion.lazySelectionPill
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 /** Limits for the resizable session layout, in dp. */
 object SessionLayoutLimits {
@@ -108,20 +110,26 @@ fun SessionRail(
                 maxLines = 1,
             )
         }
-        LazyColumn(Modifier.fillMaxWidth()) {
+        val listState = rememberLazyListState()
+        // One highlight glides between rows instead of each row fading its own background.
+        LazyColumn(
+            Modifier.fillMaxWidth().lazySelectionPill(
+                listState = listState,
+                selectedIndex = sessions.indexOfFirst { it.live.sessionId == currentId },
+                color = MaterialTheme.colorScheme.primaryContainer,
+                horizontalInset = 8.dp,
+                verticalInset = 1.dp,
+            ),
+            state = listState,
+        ) {
             items(sessions, key = { it.live.sessionId }) { s ->
                 val selected = s.live.sessionId == currentId
-                val bg by animateColorAsState(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                    tween(250),
-                    label = "railBg",
-                )
                 val item = @Composable {
                     // Surface(onClick) clips its ripple to the pill.
                     Surface(
                         onClick = { onOpen(s.live.sessionId) },
                         shape = RoundedCornerShape(50),
-                        color = bg,
+                        color = Color.Transparent,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp),
                     ) {
                         Row(

@@ -14,6 +14,7 @@ import com.programmersbox.claudemanager.data.db.buildDatabase
 import com.programmersbox.claudemanager.data.db.historyDao
 import com.programmersbox.claudemanager.data.db.settingsDao
 import com.programmersbox.claudemanager.data.settings.SettingsRepository
+import com.programmersbox.claudemanager.ui.motion.SettingsBloomMetadata
 import com.programmersbox.claudemanager.ui.navigation.SettingsRoute
 import com.programmersbox.claudemanager.ui.settings.SettingsScreen
 import com.programmersbox.claudemanager.ui.settings.SettingsViewModel
@@ -64,6 +65,7 @@ val appModule = module {
     viewModel<SettingsViewModel>()
 
     navigation<Home> { HomeScreen() }
-    navigation<SettingsRoute> { SettingsScreen() }
-    navigation<SessionRoute> { route -> SessionScreen(vm = koinViewModel { parametersOf(route.id, route.timeline) }) }
+    navigation<SettingsRoute>(metadata = SettingsBloomMetadata) { SettingsScreen() }
+    // Session entries share one content key (see AppNavigation), so each session's ViewModel is keyed by id.
+    navigation<SessionRoute> { route -> SessionScreen(vm = koinViewModel(key = route.id) { parametersOf(route.id, route.timeline) }) }
 }

@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,7 +65,13 @@ fun TitleBarScope.MainTitleBarControls(
             }
             TitleBarSegmented(listOf(HomeView.Board to "Board", HomeView.Timeline to "Timeline"), view, controls::setView)
         }
-        if (top != SettingsRoute) SettingsButton(onClick = navigator::openSettings)
+        if (top != SettingsRoute) {
+            SettingsButton(
+                onClick = navigator::openSettings,
+                // Settings blooms out of this button, so remember where it is.
+                modifier = Modifier.onGloballyPositioned { navigator.settingsOrigin = it.boundsInWindow() },
+            )
+        }
     }
 }
 
@@ -90,7 +98,7 @@ private fun <T> TitleBarScope.TitleBarSegmented(options: List<Pair<T, String>>, 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TitleBarScope.SettingsButton(onClick: () -> Unit) {
+private fun TitleBarScope.SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     TooltipArea(
         tooltip = {
             Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.inverseSurface) {
@@ -99,7 +107,7 @@ private fun TitleBarScope.SettingsButton(onClick: () -> Unit) {
         },
     ) {
         Box(
-            Modifier.size(28.dp).clip(CircleShape).titleBarClickable(onClick),
+            modifier.size(28.dp).clip(CircleShape).titleBarClickable(onClick),
             contentAlignment = Alignment.Center,
         ) {
             Icon(SettingsGlyph, contentDescription = "Settings", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
