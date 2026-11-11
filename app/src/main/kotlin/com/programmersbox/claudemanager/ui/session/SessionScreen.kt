@@ -14,6 +14,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
+import com.programmersbox.claudemanager.ui.components.CallSplitBar
+import com.programmersbox.claudemanager.ui.components.ContextMeter
+import com.programmersbox.claudemanager.ui.components.ModeChip
+import com.programmersbox.claudemanager.ui.components.PermissionChip
+import com.programmersbox.claudemanager.ui.components.PrChip
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.clipToBounds
 import kotlin.math.roundToInt
@@ -256,16 +262,25 @@ private fun Header(s: SessionSummary, now: Long, showCost: Boolean) {
     val live = s.live
     val a = s.activity
     Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Chips keep their width and wrap to a new line when the header is narrow.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(s.displayName, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             StatusPill(live.status, background = s.runningChildren(now), backgroundLabel = s.runningChildrenLabel(now))
+            ModeChip(a.execution.mode)
             SourceChip(live.source)
+            PermissionChip(a.permissionMode, long = true)
             a.model?.let { Chip(it) }
+            a.effort?.let { Chip("effort: $it") }
             a.gitBranch?.let { Chip("⎇ $it") }
+            a.pullRequest?.let { PrChip(it, long = true) }
         }
         a.title?.let { Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Text("${live.cwd} · pid ${live.pid}", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat("Elapsed", formatElapsed(live.startedAt, now), roll = false)
             Stat("Context", formatTokens(a.contextTokens))
             Stat("Output", formatTokens(a.outputTokens))
@@ -274,6 +289,8 @@ private fun Header(s: SessionSummary, now: Long, showCost: Boolean) {
             Stat("Agents", a.subagents.size.toString())
             Stat("Shells", s.visibleShells.size.toString())
             s.activity.tasks.size.takeIf { it > 0 }?.let { Stat("Monitors & workflows", it.toString()) }
+            a.prompts.takeIf { it > 0 }?.let { Stat("Prompts", it.toString()) }
+            Stat("Files edited", a.filesEdited.toString())
         }
     }
 }
@@ -431,11 +448,74 @@ private fun MainDetails(s: SessionSummary, vm: SessionViewModel) {
     var name by remember(s.live.sessionId) { mutableStateOf(s.displayName) }
     LaunchedEffect(s.displayName) { name = s.displayName }
 
+    val a = s.activity
+    val execution = a.execution
     Title("Main thread", s.live.status)
     Label("Last message")
-    Message(s.activity.lastText)
+    Message(a.lastText)
     Label("Recent tools")
-    ToolLog(s.activity.recent)
+    ToolLog(a.recent)
+
+    Label("Execution")
+    KeyValues(
+        "Mode" to execution.mode.label,
+        "Agents" to "${a.subagents.size} (${a.subagents.count { it.running }} running)",
+    )
+    a.subagents.groupingBy { it.type }.eachCount().takeIf { it.isNotEmpty() }?.let { types ->
+        KeyValues("Agent types" to types.entries.sortedByDescending { it.value }.joinToString(", ") { "${it.key} ×${it.value}" })
+    }
+    CallSplitBar(execution.mainCalls, execution.agentCalls)
+    Row {
+        Text("Main thread ${execution.mainCalls} calls", Modifier.weight(1f), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Agents ${execution.agentCalls} calls", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    Text("Why: ${execution.reason}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+    Label("Configuration")
+    KeyValues(
+        *listOfNotNull(
+            "Permissions" to (a.permissionMode ?: "—"),
+            "Model" to (a.model ?: "—"),
+            "Effort" to (a.effort ?: "—"),
+            s.live.version?.let { "Claude Code" to "$it · ${s.live.source.label}" },
+        ).toTypedArray(),
+    )
+
+    if (a.gitBranch != null || a.worktree != null || a.pullRequest != null) {
+        Label("Workspace")
+        KeyValues(
+            *listOfNotNull(
+                (a.worktree?.branch ?: a.gitBranch)?.let { "Branch" to it },
+                a.worktree?.originalCwd?.let { "Worktree of" to it },
+            ).toTypedArray(),
+        )
+        a.pullRequest?.let { pr ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Pull request", Modifier.width(92.dp), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                PrChip(pr, long = true)
+                pr.repository?.let { Text("  $it", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+        }
+    }
+
+    a.lastPrompt?.let {
+        Label("Last prompt")
+        Message(it)
+    }
+    if (a.skills.isNotEmpty()) {
+        Label("Skills used")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            a.skills.forEach { Chip(it.substringAfter(':')) }
+        }
+    }
+
+    Label("Context")
+    ContextMeter(a.contextTokens, a.contextWindow, Modifier.fillMaxWidth(), label = false)
+    KeyValues(
+        "Used" to "${formatTokens(a.contextTokens)} / ${formatTokens(a.contextWindow)}",
+        "Compactions" to a.compactions.toString(),
+        "Hook errors" to a.hookErrors.toString(),
+    )
     Label("Session")
     OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

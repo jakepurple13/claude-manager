@@ -24,6 +24,21 @@ class TranscriptAccumulator {
     var contextTokens: Long = 0; private set
     var lastText: String? = null; private set
     var lastActivityAt: Long? = null; private set
+    var permissionMode: String? = null; private set
+    var effort: String? = null; private set
+    var worktree: WorktreeInfo? = null; private set
+    var pullRequest: PullRequestLink? = null; private set
+    var lastPrompt: String? = null; private set
+    var prompts: Int = 0; private set
+    var compactions: Int = 0; private set
+    var hookErrors: Int = 0; private set
+    private val editedFiles = LinkedHashSet<String>()
+    private val skillsUsed = LinkedHashSet<String>()
+
+    /** Files passed to Edit, Write or NotebookEdit. */
+    val filesEdited: Set<String> get() = editedFiles
+    /** Skills loaded through the Skill tool, in first-use order. */
+    val skills: List<String> get() = skillsUsed.toList()
 
     /** Output tokens per API message id; one message is split over several records. */
     private val outputByMessage = HashMap<String, Long>()
@@ -58,8 +73,25 @@ class TranscriptAccumulator {
         val at = record.str("timestamp")?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
         when (record.str("type")) {
             "ai-title" -> record.str("aiTitle")?.let { title = it }
-            "assistant" -> onAssistant(record, at)
-            "user" -> onUser(record, at)
+            "assistant" -> {
+                record.str("effort")?.let { effort = it }
+                onAssistant(record, at)
+            }
+            "user" -> {
+                record.str("permissionMode")?.let { permissionMode = it }
+                (record.obj("turnPosition")?.get("promptIndex") as? JsonPrimitive)?.longOrNull?.let { prompts = maxOf(prompts, it.toInt()) }
+                onUser(record, at)
+            }
+            "permission-mode" -> record.str("permissionMode")?.let { permissionMode = it }
+            "last-prompt" -> record.str("lastPrompt")?.takeIf { it.isNotBlank() }?.let { lastPrompt = it }
+            "worktree-state" -> worktree = record.obj("worktreeSession")?.let {
+                WorktreeInfo(name = it.str("worktreeName"), branch = it.str("worktreeBranch"), originalCwd = it.str("originalCwd"))
+            }
+            "pr-link" -> (record["prNumber"] as? JsonPrimitive)?.longOrNull?.let {
+                pullRequest = PullRequestLink(it, record.str("prUrl"), record.str("prRepository"))
+            }
+            "system" -> if (record.str("subtype") == "compact_boundary") compactions++
+            "attachment" -> record.obj("attachment")?.str("type")?.let { if (it.startsWith("hook_") && "error" in it) hookErrors++ }
             // Background-task notifications are queued before they reach the model; the queue
             // has every one, while only some are also written as user messages.
             "queue-operation" -> if (record.str("operation") == "enqueue") {
@@ -104,6 +136,9 @@ class TranscriptAccumulator {
                         if (toolTimesList.size > MAX_TOOL_TIMES) toolTimesList.removeFirst()
                     }
                     when (name) {
+                        "Edit", "Write", "MultiEdit" -> input?.str("file_path")?.let { editedFiles += it }
+                        "NotebookEdit" -> input?.str("notebook_path")?.let { editedFiles += it }
+                        "Skill" -> input?.str("skill")?.takeIf { it.isNotBlank() }?.let { skillsUsed += it }
                         "Monitor" -> tasksByToolId[id] = BackgroundTask(
                             toolUseId = id,
                             kind = TaskKind.Monitor,
