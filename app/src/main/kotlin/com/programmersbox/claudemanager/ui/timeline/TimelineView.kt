@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +63,10 @@ fun TimelineView(
         lane.key == "main" || lane.segments.any { (it.end ?: now) >= start } || lane.minis.any { m -> m.any { (it.end ?: now) >= start } }
     }
     val hidden = lanes.size - visible.size
+    // Bars and gridlines zoom to the new window; the lane list above switches right away so
+    // lanes entering or leaving the window use animateItem.
+    val zoom = remember { TimelineZoom(windowMs) }
+    LaunchedEffect(windowMs) { zoom.animateTo(windowMs) }
     Column(modifier) {
         Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -71,7 +76,7 @@ fun TimelineView(
                 letterSpacing = 0.6.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Axis(windowMs, Modifier.weight(1f).fillMaxHeight())
+            Axis(zoom, Modifier.weight(1f).fillMaxHeight())
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         LazyColumn(Modifier.weight(1f)) {
@@ -87,7 +92,7 @@ fun TimelineView(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         LaneLabel(lane, Modifier.width(LabelWidth))
-                        Lane(lane, start, now, windowMs, Modifier.weight(1f).fillMaxHeight())
+                        Lane(lane, now, zoom, Modifier.weight(1f).fillMaxHeight())
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -126,18 +131,22 @@ private fun LaneLabel(lane: TimelineLane, modifier: Modifier) {
 }
 
 @Composable
-private fun Axis(windowMs: Long, modifier: Modifier) {
-    val minutes = (windowMs / 60_000).toInt()
-    val step = gridStepMinutes(minutes)
+private fun Axis(zoom: TimelineZoom, modifier: Modifier) {
+    val minutes = zoom.shownMs / 60_000f
     Box(modifier) {
-        (step until minutes step step).forEach { m ->
-            val fraction = 1f - m / minutes.toFloat()
-            Text(
-                "-${m}m",
-                Modifier.align(BiasAlignment(fraction * 2 - 1, 0f)),
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        zoom.grids.forEach { layer ->
+            if (layer.alpha <= 0f) return@forEach
+            gridMinutes(layer.stepMinutes, minutes).forEach { m ->
+                val fraction = 1f - m / minutes
+                Text(
+                    "-${m}m",
+                    Modifier
+                        .align(BiasAlignment(fraction * 2 - 1, 0f))
+                        .graphicsLayer { alpha = layer.alpha },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Text(
             "now",
@@ -149,15 +158,11 @@ private fun Axis(windowMs: Long, modifier: Modifier) {
     }
 }
 
-private fun gridStepMinutes(windowMinutes: Int) = when {
-    windowMinutes <= 15 -> 5
-    windowMinutes <= 30 -> 10
-    windowMinutes <= 60 -> 15
-    else -> 30
-}
+/** Gridline positions (minutes ago) for [step] inside a window [windowMinutes] wide, which may be fractional mid-zoom. */
+private fun gridMinutes(step: Int, windowMinutes: Float) = generateSequence(step) { it + step }.takeWhile { it < windowMinutes }
 
 @Composable
-private fun Lane(lane: TimelineLane, start: Long, now: Long, windowMs: Long, modifier: Modifier) {
+private fun Lane(lane: TimelineLane, now: Long, zoom: TimelineZoom, modifier: Modifier) {
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val nowColor = MaterialTheme.colorScheme.primary
     // Bars grow in from the left the first time a lane appears.
@@ -165,14 +170,17 @@ private fun Lane(lane: TimelineLane, start: Long, now: Long, windowMs: Long, mod
     LaunchedEffect(lane.key) { reveal.animateTo(1f, tween(600)) }
 
     Canvas(modifier) {
-        val span = (now - start).toFloat()
-        fun x(t: Long) = ((t - start) / span).coerceIn(0f, 1f) * size.width
+        val span = zoom.shownMs
+        val start = now - span.toLong()
+        fun x(t: Long) = (1f + (t - now) / span).coerceIn(0f, 1f) * size.width
 
-        val minutes = (windowMs / 60_000).toInt()
-        val step = gridStepMinutes(minutes)
-        for (m in step until minutes step step) {
-            val gx = size.width * (1f - m / minutes.toFloat())
-            drawLine(gridColor, Offset(gx, 0f), Offset(gx, size.height), strokeWidth = 1f)
+        val minutes = span / 60_000f
+        zoom.grids.forEach { layer ->
+            if (layer.alpha <= 0f) return@forEach
+            gridMinutes(layer.stepMinutes, minutes).forEach { m ->
+                val gx = size.width * (1f - m / minutes)
+                drawLine(gridColor.copy(alpha = gridColor.alpha * layer.alpha), Offset(gx, 0f), Offset(gx, size.height), strokeWidth = 1f)
+            }
         }
 
         val barTop = 14.dp.toPx()
