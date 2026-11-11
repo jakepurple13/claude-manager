@@ -29,21 +29,6 @@ class SessionWindowsTest {
     }
 
     @Test
-    fun switchingAWindowToASessionOpenElsewhereFocusesThatWindow() {
-        val windows = SessionWindows()
-        windows.open("a")
-        windows.open("b")
-        val first = windows.windows[0]
-        windows.show(first, "b")
-        assertEquals("a", first.sessionId)
-        assertEquals(1, windows.windows[1].focusRequests)
-
-        windows.show(first, "c")
-        assertEquals("c", first.sessionId)
-        assertEquals(listOf("c", "b"), windows.windows.map { it.sessionId })
-    }
-
-    @Test
     fun closingRemovesOnlyThatWindow() {
         val windows = SessionWindows()
         windows.open("a")

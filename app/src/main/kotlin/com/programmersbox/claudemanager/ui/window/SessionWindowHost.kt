@@ -209,7 +209,7 @@ fun NucleusApplicationScope.SessionWindowHost(
                     SessionSkeleton()
                     return@AnimatedContent
                 }
-                // A fresh ViewModel store per session, cleared when the window closes or switches session.
+                // A fresh ViewModel store for this window, cleared when it closes.
                 key(window.sessionId) {
                     val owner = remember {
                         object : ViewModelStoreOwner {
@@ -226,7 +226,6 @@ fun NucleusApplicationScope.SessionWindowHost(
                                     SessionWindowControls(
                                         onShowBoard = appWindow::bringToFront,
                                         onClose = { sessionWindows.requestClose(window) },
-                                        onOpenSession = { sessionWindows.show(window, it) },
                                     )
                                 },
                             )

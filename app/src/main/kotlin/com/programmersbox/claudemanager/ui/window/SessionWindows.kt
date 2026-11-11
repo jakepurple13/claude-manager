@@ -10,17 +10,14 @@ import androidx.compose.runtime.setValue
 /** A rectangle on screen in dp, top-left origin: where a new window grows from. */
 data class ScreenRect(val x: Float, val y: Float, val width: Float, val height: Float)
 
-/** One separate window showing a session. The window keeps its [key]; the session it shows can change. */
+/** One separate window showing a single session. */
 @Stable
 class SessionWindow internal constructor(
     val key: Long,
-    sessionId: String,
+    val sessionId: String,
     /** The card the window was opened from, so it can grow out of it. Null opens it in place. */
     val origin: ScreenRect? = null,
 ) {
-    var sessionId by mutableStateOf(sessionId)
-        internal set
-
     /** Goes up each time something asks for this window to come to the front. */
     var focusRequests by mutableIntStateOf(0)
         private set
@@ -52,12 +49,6 @@ class SessionWindows {
         val window = windows.firstOrNull { it.sessionId == sessionId } ?: return false
         window.requestFocus()
         return true
-    }
-
-    /** Switches [window] to [sessionId], unless another window already shows it; then that one comes forward. */
-    fun show(window: SessionWindow, sessionId: String) {
-        if (window.sessionId == sessionId) return
-        if (!focus(sessionId)) window.sessionId = sessionId
     }
 
     /** Starts the closing animation; the window calls [close] when it has finished. */

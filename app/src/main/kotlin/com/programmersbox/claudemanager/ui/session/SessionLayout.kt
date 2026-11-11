@@ -91,13 +91,12 @@ fun SessionRail(
     compact: Boolean,
     onBack: () -> Unit,
     onOpen: (String) -> Unit,
-    backLabel: String = "‹ All sessions",
 ) {
     Column(
         Modifier.width(width).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceContainer).clipToBounds(),
     ) {
         TextButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp, top = 6.dp)) {
-            Text(if (compact) "‹" else backLabel, maxLines = 1)
+            Text(if (compact) "‹" else "‹ All sessions", maxLines = 1)
         }
         if (!compact) {
             Text(
