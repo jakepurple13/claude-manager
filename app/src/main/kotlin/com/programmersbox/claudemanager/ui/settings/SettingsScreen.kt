@@ -7,6 +7,14 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import com.programmersbox.claudemanager.ui.theme.LocalThemeRipple
 import com.programmersbox.claudemanager.ui.theme.Palette
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.runtime.IntState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -80,7 +88,10 @@ import com.programmersbox.claudemanager.ui.components.ConfirmDialog
 import com.programmersbox.claudemanager.ui.components.StatusPill
 import com.programmersbox.claudemanager.ui.components.rememberNow
 import com.programmersbox.claudemanager.ui.home.SessionCard
+import com.programmersbox.claudemanager.ui.motion.EmphasizedAccelerate
 import com.programmersbox.claudemanager.ui.motion.EmphasizedDecelerate
+import com.programmersbox.claudemanager.ui.motion.settingsBloom
+import com.programmersbox.claudemanager.ui.motion.stretchSelectionPill
 import com.programmersbox.claudemanager.ui.navigation.Navigator
 import com.programmersbox.claudemanager.ui.theme.StatusColors
 import com.programmersbox.claudemanager.ui.timeline.Segmented
@@ -94,19 +105,29 @@ fun SettingsScreen(
     navigator: Navigator = koinInject(),
 ) {
     val category by vm.category.collectAsState()
+    // 1 when the new category sits below the old one in the sidebar, -1 above. Set on click and read
+    // when the pane's slides start, so the outgoing and incoming panes agree on the direction.
+    val direction = remember { mutableIntStateOf(1) }
 
-    Surface(Modifier.fillMaxSize()) {
+    Surface(Modifier.fillMaxSize().settingsBloom { navigator.settingsOrigin }) {
         Row(Modifier.fillMaxSize()) {
-            Sidebar(category, vm, onSelect = vm::select, onBack = navigator::back)
+            Sidebar(
+                selected = category,
+                vm = vm,
+                onSelect = { c ->
+                    direction.intValue = if (c.ordinal >= category.ordinal) 1 else -1
+                    vm.select(c)
+                },
+                onBack = navigator::back,
+            )
             VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // The pane's columns animate themselves (see Pane), so the container adds nothing.
             AnimatedContent(
                 targetState = category,
-                transitionSpec = {
-                    (fadeIn(tween(320)) + slideInHorizontally(tween(320, easing = EmphasizedDecelerate)) { it / 14 }) togetherWith fadeOut(tween(120))
-                },
+                transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 label = "settingsPane",
-            ) { target -> Pane(target, vm) }
+            ) { target -> Pane(target, vm, direction) }
         }
     }
 }
@@ -119,40 +140,72 @@ private fun Sidebar(selected: SettingsCategory, vm: SettingsViewModel, onSelect:
     ) {
         TextButton(onClick = onBack) { Text("‹ Back to sessions") }
         Spacer(Modifier.height(6.dp))
-        SettingsCategory.entries.forEach { c ->
-            // NavigationDrawerItem clips its ripple to the pill and animates the selected colors.
-            NavigationDrawerItem(
-                label = { Text(c.title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium) },
-                icon = { Text(c.glyph, fontSize = 14.sp, modifier = Modifier.width(18.dp)) },
-                selected = c == selected,
-                onClick = { onSelect(c) },
-                shape = RoundedCornerShape(50),
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    unselectedContainerColor = Color.Transparent,
-                ),
-                modifier = Modifier.height(44.dp),
-            )
+        // One pill behind the items stretches from the old category to the new one.
+        Column(
+            Modifier.stretchSelectionPill(
+                selectedIndex = selected.ordinal,
+                itemHeight = SidebarItemHeight,
+                spacing = SidebarItemSpacing,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ),
+            verticalArrangement = Arrangement.spacedBy(SidebarItemSpacing),
+        ) {
+            SettingsCategory.entries.forEach { c ->
+                // NavigationDrawerItem clips its ripple to the pill and animates the selected colors.
+                NavigationDrawerItem(
+                    label = { Text(c.title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium) },
+                    icon = { Text(c.glyph, fontSize = 14.sp, modifier = Modifier.width(18.dp)) },
+                    selected = c == selected,
+                    onClick = { onSelect(c) },
+                    shape = RoundedCornerShape(50),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = Color.Transparent,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        unselectedContainerColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.height(SidebarItemHeight),
+                )
+            }
         }
         Spacer(Modifier.weight(1f))
         Text("Claude Manager ${vm.currentVersion}", Modifier.padding(horizontal = 14.dp), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
+private val SidebarItemHeight = 44.dp
+private val SidebarItemSpacing = 2.dp
+
+/**
+ * One category's settings. The settings move first and the preview follows 70ms later at half the
+ * distance, both toward the side the new category sits on in the sidebar.
+ */
 @Composable
-private fun Pane(category: SettingsCategory, vm: SettingsViewModel) {
+private fun AnimatedVisibilityScope.Pane(category: SettingsCategory, vm: SettingsViewModel, direction: IntState) {
     val s by vm.settings.collectAsState()
+    val density = LocalDensity.current
+    fun px(dp: Int) = with(density) { dp.dp.roundToPx() }
+    val leadIn = slideInVertically(tween(380, delayMillis = 60, easing = EmphasizedDecelerate)) { direction.intValue * px(36) } +
+        fadeIn(tween(300, delayMillis = 60))
+    val leadOut = slideOutVertically(tween(150, easing = EmphasizedAccelerate)) { -direction.intValue * px(16) } + fadeOut(tween(150))
+    val lead = Modifier.animateEnterExit(enter = leadIn, exit = leadOut)
+    val trail = Modifier.animateEnterExit(
+        enter = slideInVertically(tween(420, delayMillis = 130, easing = EmphasizedDecelerate)) { direction.intValue * px(18) } +
+            fadeIn(tween(420, delayMillis = 130)),
+        exit = slideOutVertically(tween(170, delayMillis = 30, easing = EmphasizedAccelerate)) { -direction.intValue * px(8) } +
+            fadeOut(tween(170, delayMillis = 30)),
+    )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 24.dp)) {
-        Text(category.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-        if (category.intro.isNotEmpty()) {
-            Text(category.intro, Modifier.padding(top = 4.dp, bottom = 20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            Spacer(Modifier.height(20.dp))
+        Column(lead) {
+            Text(category.title, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            if (category.intro.isNotEmpty()) {
+                Text(category.intro, Modifier.padding(top = 4.dp, bottom = 20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Spacer(Modifier.height(20.dp))
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            Column(Modifier.weight(1f).widthIn(max = 660.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            Column(lead.weight(1f).widthIn(max = 660.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                 when (category) {
                     SettingsCategory.Display -> DisplaySettings(s, vm)
                     SettingsCategory.Notifications -> NotificationSettings(s, vm)
@@ -162,9 +215,9 @@ private fun Pane(category: SettingsCategory, vm: SettingsViewModel) {
                 }
             }
             when (category) {
-                SettingsCategory.Display -> PreviewColumn("Card preview") { DisplayPreview(s, vm) }
-                SettingsCategory.Notifications -> PreviewColumn("Notifications you'd get") { NotificationPreview(s) }
-                SettingsCategory.History -> PreviewColumn("History kept") { HistoryPreview(s, vm) }
+                SettingsCategory.Display -> PreviewColumn("Card preview", trail) { DisplayPreview(s, vm) }
+                SettingsCategory.Notifications -> PreviewColumn("Notifications you'd get", trail) { NotificationPreview(s) }
+                SettingsCategory.History -> PreviewColumn("History kept", trail) { HistoryPreview(s, vm) }
                 else -> Unit
             }
         }
@@ -445,9 +498,9 @@ private fun UpdatesGroup(s: AppSettings, vm: SettingsViewModel) {
 /* ---------------- previews ---------------- */
 
 @Composable
-private fun PreviewColumn(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun PreviewColumn(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        Modifier
+        modifier
             .width(340.dp)
             .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
             .padding(16.dp),

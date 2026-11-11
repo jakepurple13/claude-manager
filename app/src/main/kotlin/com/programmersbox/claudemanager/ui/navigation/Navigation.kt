@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.compose.ui.geometry.Rect
+import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
@@ -39,13 +41,21 @@ data object SettingsRoute : NavKey
 class Navigator(private val sessionWindows: SessionWindows) {
     val backStack = mutableStateListOf<NavKey>(Home)
 
+    /** Window bounds of the title bar's Settings button, where the settings screen blooms from. */
+    var settingsOrigin: Rect? = null
+
     val canGoBack: Boolean get() = backStack.size > 1
 
     /** Opens the session in the main window, or brings its own window forward if it has one. */
     fun openSession(sessionId: String, timeline: Boolean = false) {
         if (sessionWindows.focus(sessionId)) return
         val current = backStack.lastOrNull()
-        if (current is SessionRoute && current.id == sessionId) return
+        if (current is SessionRoute) {
+            // Swap in place: session entries share one content key, so the screen stays put and only
+            // its content animates (see SessionScreen) instead of the whole route transitioning.
+            if (current.id != sessionId) backStack[backStack.lastIndex] = SessionRoute(sessionId, timeline)
+            return
+        }
         backStack.removeAll { it is SessionRoute }
         backStack.add(SessionRoute(sessionId, timeline))
     }
@@ -61,9 +71,12 @@ class Navigator(private val sessionWindows: SessionWindows) {
     }
 }
 
+private const val SessionContentKey = "session"
+
 @OptIn(KoinExperimentalAPI::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNavigation(navigator: Navigator = koinInject()) {
+    val koinEntries = koinEntryProvider<NavKey>()
     SharedTransitionLayout {
         CompositionLocalProvider(LocalSharedTransitionScope provides this) {
             NavDisplay(
@@ -86,7 +99,11 @@ fun AppNavigation(navigator: Navigator = koinInject()) {
                 predictivePopTransitionSpec = {
                     (fadeIn(tween(ContainerExitMs)) + scaleIn(initialScale = 0.97f)) togetherWith fadeOut(tween(ContainerExitMs))
                 },
-                entryProvider = koinEntryProvider(),
+                entryProvider = { key ->
+                    val entry = koinEntries(key)
+                    // One content key for every session, so switching sessions keeps the same entry.
+                    if (key is SessionRoute) NavEntry(key, SessionContentKey, entry.metadata) { entry.Content() } else entry
+                },
             )
         }
     }
