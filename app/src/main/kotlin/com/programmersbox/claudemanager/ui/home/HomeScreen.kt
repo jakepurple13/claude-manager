@@ -16,10 +16,7 @@ import com.programmersbox.claudemanager.ui.motion.sessionContainer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.RowScope
-import com.programmersbox.claudemanager.ui.timeline.Segmented
 import com.programmersbox.claudemanager.ui.timeline.TimelineView
-import com.programmersbox.claudemanager.ui.timeline.TimelineWindows
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -107,17 +104,12 @@ fun HomeScreen(
     val sessions = state.sessions
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer)) {
+        // Board/Timeline, the time range and Settings live in the main window's title bar.
         SummaryBar(
             sessions,
             devicesHeld = if (state.cdmAvailable) state.devices.count { it.holderSessionId != null } else null,
             totalCost = if (showCost) sessions.fold(CostEstimate.Zero) { acc, it -> acc + it.activity.cost } else null,
-        ) {
-            AnimatedVisibility(view == HomeView.Timeline, enter = fadeIn(), exit = fadeOut()) {
-                Segmented(TimelineWindows, windowMs, vm::setWindow)
-            }
-            Segmented(listOf(HomeView.Board to "Board", HomeView.Timeline to "Timeline"), view, vm::setView)
-            TextButton(onClick = navigator::openSettings) { Text("Settings") }
-        }
+        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         AnimatedVisibility(state.orphanShells.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             OrphanBanner(state.orphanShells, onKill = vm::killShell)
@@ -177,11 +169,13 @@ fun HomeScreen(
 }
 
 @Composable
-private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, totalCost: CostEstimate?, actions: @Composable RowScope.() -> Unit) {
-    Row(
+private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, totalCost: CostEstimate?) {
+    // Stats wrap to a second line instead of running off the edge of a narrow window.
+    FlowRow(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         Stat(sessions.size, "sessions")
         Stat(sessions.count { it.live.status == SessionStatus.Working }, "working")
@@ -196,8 +190,6 @@ private fun SummaryBar(sessions: List<SessionSummary>, devicesHeld: Int?, totalC
                 Text("est. cost", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.5.sp)
             }
         }
-        Spacer(Modifier.weight(1f))
-        actions()
     }
 }
 

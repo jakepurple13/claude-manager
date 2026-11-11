@@ -19,6 +19,7 @@ import com.programmersbox.claudemanager.ui.settings.SettingsScreen
 import com.programmersbox.claudemanager.ui.settings.SettingsViewModel
 import com.programmersbox.claudemanager.data.db.sessionLabelDao
 import com.programmersbox.claudemanager.data.registry.SessionRegistry
+import com.programmersbox.claudemanager.ui.home.BoardControls
 import com.programmersbox.claudemanager.ui.home.HomeScreen
 import com.programmersbox.claudemanager.ui.home.HomeViewModel
 import com.programmersbox.claudemanager.ui.navigation.Home
@@ -55,6 +56,7 @@ val appModule = module {
     single<SessionNotifier>()
     single<UpdateManager>()
     single<SessionWindows>()
+    single<BoardControls>()
     single<Navigator>()
 
     viewModel<HomeViewModel>()

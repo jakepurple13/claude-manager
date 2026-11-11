@@ -10,10 +10,8 @@ import kotlinx.coroutines.flow.map
 import com.programmersbox.claudemanager.ui.timeline.TimelineBuilder
 import com.programmersbox.claudemanager.ui.timeline.TimelineLane
 import com.programmersbox.claudemanager.ui.timeline.TimelineWindows
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -24,17 +22,15 @@ class HomeViewModel(
     private val repository: SessionRepository,
     history: HistoryDao,
     settings: SettingsRepository,
+    private val controls: BoardControls,
 ) : ViewModel() {
     val showCost: StateFlow<Boolean> =
         settings.settings.map { it.showCost }.stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value.showCost)
 
     val state: StateFlow<SessionsState> = repository.state
 
-    private val _view = MutableStateFlow(HomeView.Board)
-    val view: StateFlow<HomeView> = _view.asStateFlow()
-
-    private val _windowMs = MutableStateFlow(TimelineWindows[1].first)
-    val windowMs: StateFlow<Long> = _windowMs.asStateFlow()
+    val view: StateFlow<HomeView> = controls.view
+    val windowMs: StateFlow<Long> = controls.windowMs
 
     private val since = System.currentTimeMillis() - TimelineWindows.maxOf { it.first }
 
@@ -43,8 +39,8 @@ class HomeViewModel(
             TimelineBuilder.globalLanes(state, segments, records)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun setView(view: HomeView) { _view.value = view }
-    fun setWindow(ms: Long) { _windowMs.value = ms }
+    fun setView(view: HomeView) = controls.setView(view)
+    fun setWindow(ms: Long) = controls.setWindow(ms)
     fun killShell(pid: Long): Boolean = repository.killShell(pid)
 
     fun rename(sessionId: String, name: String) {
