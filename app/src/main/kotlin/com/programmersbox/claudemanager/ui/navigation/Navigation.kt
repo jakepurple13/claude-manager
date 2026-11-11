@@ -20,6 +20,7 @@ import com.programmersbox.claudemanager.ui.motion.ContainerExitMs
 import com.programmersbox.claudemanager.ui.motion.EmphasizedAccelerate
 import com.programmersbox.claudemanager.ui.motion.EmphasizedDecelerate
 import com.programmersbox.claudemanager.ui.motion.LocalSharedTransitionScope
+import com.programmersbox.claudemanager.ui.window.SessionWindows
 import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
 import org.koin.compose.navigation3.koinEntryProvider
@@ -35,12 +36,14 @@ data class SessionRoute(val id: String, val timeline: Boolean = false) : NavKey
 data object SettingsRoute : NavKey
 
 /** Owns the back stack so screens and the tray can navigate without holding NavDisplay state. */
-class Navigator {
+class Navigator(private val sessionWindows: SessionWindows) {
     val backStack = mutableStateListOf<NavKey>(Home)
 
     val canGoBack: Boolean get() = backStack.size > 1
 
+    /** Opens the session in the main window, or brings its own window forward if it has one. */
     fun openSession(sessionId: String, timeline: Boolean = false) {
+        if (sessionWindows.focus(sessionId)) return
         val current = backStack.lastOrNull()
         if (current is SessionRoute && current.id == sessionId) return
         backStack.removeAll { it is SessionRoute }

@@ -105,6 +105,8 @@ private val clock = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.syst
 fun SessionScreen(
     vm: SessionViewModel,
     navigator: Navigator = koinInject(),
+    /** Set when the session has its own window instead of living in the main window's back stack. */
+    windowControls: SessionWindowControls? = null,
 ) {
     val session by vm.session.collectAsState()
     val sessions by vm.sessions.collectAsState()
@@ -145,8 +147,9 @@ fun SessionScreen(
                     currentId = vm.sessionId,
                     width = railShown,
                     compact = railW < SessionLayoutLimits.RAIL_COMPACT_BELOW,
-                    onBack = navigator::back,
-                    onOpen = { navigator.openSession(it, timeline = tab == SessionTab.Timeline) },
+                    onBack = windowControls?.onShowBoard ?: navigator::back,
+                    onOpen = windowControls?.onOpenSession ?: { navigator.openSession(it, timeline = tab == SessionTab.Timeline) },
+                    backLabel = if (windowControls != null) "Show board" else "‹ All sessions",
                 )
                 ResizeDivider(
                     description = "Resize sessions list",
@@ -164,7 +167,11 @@ fun SessionScreen(
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     val s = session
                     if (s == null) {
-                        Text("This session has ended.", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (windowControls != null) {
+                            EndedBanner(windowControls)
+                        } else {
+                            Text("This session has ended.", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         return@Column
                     }
                     Header(s, now, showCost)
@@ -254,6 +261,30 @@ fun SessionScreen(
                 })
             }
         }
+    }
+}
+
+/** What a session window does in place of the main window's back stack. */
+class SessionWindowControls(
+    val onShowBoard: () -> Unit,
+    val onClose: () -> Unit,
+    /** A rail click switches this window to that session. */
+    val onOpenSession: (String) -> Unit,
+)
+
+@Composable
+private fun EndedBanner(controls: SessionWindowControls) {
+    Row(
+        Modifier.padding(16.dp).fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        StatusPill(SessionStatus.Idle, text = "Ended")
+        Text("This session has ended.", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = controls.onShowBoard) { Text("Show board") }
+        FilledTonalButton(onClick = controls.onClose) { Text("Close window") }
     }
 }
 

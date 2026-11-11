@@ -44,9 +44,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import com.programmersbox.claudemanager.ui.components.Chip
+import com.programmersbox.claudemanager.ui.window.SessionWindows
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -94,6 +96,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun HomeScreen(
     vm: HomeViewModel = koinViewModel(),
     navigator: Navigator = koinInject(),
+    sessionWindows: SessionWindows = koinInject(),
 ) {
     val state by vm.state.collectAsState()
     val view by vm.view.collectAsState()
@@ -134,19 +137,27 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                target == HomeView.Board -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(320.dp),
+                // Staggered: each card goes into the shortest column, so short cards leave no gaps.
+                target == HomeView.Board -> LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(320.dp),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalItemSpacing = 14.dp,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(sessions, key = { it.live.sessionId }) { session ->
-                        SessionCard(
+                        val id = session.live.sessionId
+                        BoardSessionCard(
                             session = session,
                             now = now,
                             showCost = showCost,
-                            onClick = { navigator.openSession(session.live.sessionId) },
+                            inWindow = sessionWindows.isOpen(id),
+                            onOpen = { navigator.openSession(id) },
+                            onOpenInWindow = { origin -> sessionWindows.open(id, origin) },
+                            onOpenTimeline = { navigator.openSession(id, timeline = true) },
+                            onSetPinned = { vm.setPinned(id, it) },
+                            onRename = { vm.rename(id, it) },
+                            onStop = { vm.stopSession(session.live.pid) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -248,6 +259,8 @@ internal fun SessionCard(
     showCost: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** True while the session has its own window; the card shows an "In window" chip. */
+    inWindow: Boolean = false,
     /** False for previews, so they don't take part in the board's card-to-session transition. */
     shareBounds: Boolean = true,
 ) {
@@ -336,6 +349,7 @@ internal fun SessionCard(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
+                if (inWindow) Chip("⧉ In window")
                 ModeChip(activity.execution.mode)
                 PermissionChip(activity.permissionMode)
                 activity.pullRequest?.let { PrChip(it) }

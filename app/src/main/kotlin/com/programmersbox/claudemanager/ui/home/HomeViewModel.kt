@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 enum class HomeView { Board, Timeline }
 
@@ -45,4 +46,14 @@ class HomeViewModel(
     fun setView(view: HomeView) { _view.value = view }
     fun setWindow(ms: Long) { _windowMs.value = ms }
     fun killShell(pid: Long): Boolean = repository.killShell(pid)
+
+    fun rename(sessionId: String, name: String) {
+        viewModelScope.launch { repository.rename(sessionId, name) }
+    }
+
+    fun setPinned(sessionId: String, pinned: Boolean) {
+        viewModelScope.launch { repository.setPinned(sessionId, pinned) }
+    }
+
+    fun stopSession(pid: Long): Boolean = repository.stopSession(pid)
 }

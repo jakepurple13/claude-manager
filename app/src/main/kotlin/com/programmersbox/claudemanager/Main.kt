@@ -34,6 +34,11 @@ import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.window.material.MaterialDecoratedWindow
 import dev.nucleusframework.window.material.MaterialTitleBar
 import org.koin.core.context.startKoin
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import com.programmersbox.claudemanager.ui.window.SessionWindowHost
+import com.programmersbox.claudemanager.ui.window.SessionWindows
+import dev.nucleusframework.application.NucleusWindow
 
 fun main(args: Array<String>) {
     val koin = startKoin { modules(appModule) }.koin
@@ -42,6 +47,7 @@ fun main(args: Array<String>) {
     koin.get<SessionNotifier>().start()
     koin.get<UpdateManager>().start()
     val appWindow = koin.get<AppWindow>()
+    val sessionWindows = koin.get<SessionWindows>()
     val settings = koin.get<SettingsRepository>()
 
     // dockIconFollowsWindows: on macOS the Dock icon shows only while the main window is open.
@@ -52,10 +58,13 @@ fun main(args: Array<String>) {
 
         val prefs by settings.settings.collectAsState()
         val themeRipple = remember { ThemeRipple() }
+        // The main window's handle, so session windows can open cascaded from it.
+        val mainWindow = remember { arrayOfNulls<NucleusWindow>(1) }
         ClaudeManagerTheme(prefs.themeMode, prefs.themePalette) {
+          val statusDotStyle = StatusDotStyle(BackgroundIndicator.fromId(prefs.backgroundIndicator), prefs.statusDotSizeDp.dp)
           CompositionLocalProvider(
               LocalThemeRipple provides themeRipple,
-              LocalStatusDotStyle provides StatusDotStyle(BackgroundIndicator.fromId(prefs.backgroundIndicator), prefs.statusDotSizeDp.dp),
+              LocalStatusDotStyle provides statusDotStyle,
           ) {
             if (appWindow.visible) {
                 MaterialDecoratedWindow(
@@ -72,10 +81,29 @@ fun main(args: Array<String>) {
                         }
                     },
                 ) {
+                    mainWindow[0] = nucleusWindow
+                    LaunchedEffect(appWindow.focusRequests) {
+                        if (appWindow.focusRequests > 0) {
+                            nucleusWindow.toFront()
+                            nucleusWindow.requestFocus()
+                        }
+                    }
                     MaterialTitleBar { Text("Claude Manager") }
                     ThemeRippleHost(themeRipple, Modifier.fillMaxSize()) {
                         Surface(Modifier.fillMaxSize()) { AppNavigation() }
                     }
+                }
+            }
+
+            // Session windows opened from the board. Closing the main window quits, which closes these too.
+            sessionWindows.windows.forEachIndexed { index, window ->
+                key(window.key) {
+                    SessionWindowHost(
+                        window = window,
+                        index = index,
+                        mainBounds = { mainWindow[0]?.boundsOnScreen() },
+                        statusDotStyle = statusDotStyle,
+                    )
                 }
             }
 

@@ -26,6 +26,7 @@ import com.programmersbox.claudemanager.ui.navigation.Navigator
 import com.programmersbox.claudemanager.ui.navigation.SessionRoute
 import com.programmersbox.claudemanager.ui.session.SessionScreen
 import com.programmersbox.claudemanager.ui.session.SessionViewModel
+import com.programmersbox.claudemanager.ui.window.SessionWindows
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.core.parameter.parametersOf
@@ -53,6 +54,7 @@ val appModule = module {
     single<HistoryRecorder>()
     single<SessionNotifier>()
     single<UpdateManager>()
+    single<SessionWindows>()
     single<Navigator>()
 
     viewModel<HomeViewModel>()
