@@ -33,16 +33,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The runner's default apt mirror (azure.archive.ubuntu.com) can stall on every package,
-      # which hangs Setup Nucleus's apt-get install. Use the main Ubuntu archive, and give up on a
-      # stalled download quickly and retry instead of waiting out each one.
-      - name: Use the main Ubuntu apt mirror (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          echo "http://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-          sudo find /etc/apt -name '*.list' -o -name '*.sources' | xargs -r sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g'
-          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network
-
       - name: Setup Nucleus
         uses: NucleusFramework/Nucleus/.github/actions/setup-nucleus@v2.5.18
         with:
